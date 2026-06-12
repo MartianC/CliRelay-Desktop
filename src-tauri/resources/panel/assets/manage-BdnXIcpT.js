@@ -1,0 +1,1 @@
+import{c as r,j as e,r as t,B as s,A as n,d as a}from"./index-veTD6Zrp.js";const o=document.getElementById("root");if(!o)throw new Error("Root element #root not found");r.createRoot(o).render(e.jsx(t.StrictMode,{children:e.jsx(s,{basename:"/manage",children:e.jsx(n,{})})}));a();

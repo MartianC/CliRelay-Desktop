@@ -293,7 +293,7 @@ Expected: `pnpm typecheck` 能执行 TypeScript 检查。
   "bundle": {
     "active": true,
     "targets": ["dmg"],
-    "externalBin": ["binaries/clirelay-aarch64-apple-darwin"],
+    "externalBin": ["binaries/clirelay"],
     "macOS": {
       "minimumSystemVersion": "13.0"
     }

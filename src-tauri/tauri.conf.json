@@ -24,7 +24,11 @@
   "bundle": {
     "active": true,
     "targets": ["dmg"],
-    "externalBin": ["binaries/clirelay-aarch64-apple-darwin"],
+    "externalBin": ["binaries/clirelay"],
+    "resources": [
+      "resources/config.example.yaml",
+      "resources/panel/**/*"
+    ],
     "macOS": {
       "minimumSystemVersion": "13.0"
     },
