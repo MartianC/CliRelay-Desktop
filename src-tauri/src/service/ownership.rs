@@ -17,7 +17,7 @@ pub struct RuntimeState {
     pub launch_id: Uuid,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum ProcessOwnership {
     Owned,
     External,
