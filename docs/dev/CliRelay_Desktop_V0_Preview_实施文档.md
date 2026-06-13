@@ -28,16 +28,19 @@
 | Task 7 | `c1bc7a0 feat: add rotating logs` | 已完成 |
 | Task 8 | `c6b0489 feat: add sidecar ownership checks` | 已完成 |
 | Task 9 | `38db95c feat: add service health probes` | 已完成 |
+| Task 10 | `0973de0 feat: manage sidecar lifecycle` | 已完成 |
 
-**当前结论：** Task 1 到 Task 9 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏、CliRelay 原始输出采集、runtime-state、Sidecar 归属判断、健康检查、Panel ready 和 External 端口探测已经具备单元测试覆盖。
+**当前结论：** Task 1 到 Task 10 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏、CliRelay 原始输出采集、runtime-state、Sidecar 归属判断、健康检查、Panel ready、External 端口探测和 Service Manager 启停重启流程已经具备测试覆盖。
 
-**下一步：** 从 Task 10 开始实现 Service Manager 启停重启流程。运行时 Sidecar 启动、退出清理和 UI 接入仍在后续 Task 中完成。
+**下一步：** 从 Task 11 开始实现 Rust command 白名单和 Settings patch 校验。窗口管理、React Shell、菜单栏和发布 CI 仍在后续 Task 中完成。
 
 **最近验证：**
 
 ```bash
 pnpm test
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml --test service_manager
 cargo test --manifest-path src-tauri/Cargo.toml service::health
 cargo test --manifest-path src-tauri/Cargo.toml service::ownership
 cargo test --manifest-path src-tauri/Cargo.toml service::logs
@@ -49,7 +52,7 @@ git ls-files src-tauri/binaries src-tauri/resources/config.example.yaml src-taur
 git check-ignore -v src-tauri/binaries/clirelay-aarch64-apple-darwin src-tauri/resources/config.example.yaml src-tauri/resources/panel/manage.html src-tauri/resources/panel/assets/panel-chunk.js
 ```
 
-Expected: `pnpm test` 通过 6 个用例；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 31 个 Rust 用例；`service::health` 过滤器通过 6 个用例；`service::ownership` 过滤器通过 7 个用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
+Expected: `pnpm test` 通过 6 个用例；`cargo fmt --manifest-path src-tauri/Cargo.toml --check` 通过；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 31 个单元用例和 4 个 Service Manager 集成用例；`cargo test --manifest-path src-tauri/Cargo.toml --test service_manager` 通过 4 个用例；`service::health` 过滤器通过 6 个用例；`service::ownership` 过滤器通过 7 个用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
 
 ---
 
@@ -214,7 +217,7 @@ CliRelay-Desktop/
 - [x] Task 7：实现日志轮转、日志脱敏和 Sidecar stdout/stderr 采集
 - [x] Task 8：实现进程归属、runtime-state 和残留接管
 - [x] Task 9：实现健康检查、Panel ready 判定和 External 探测
-- [ ] Task 10：实现 Service Manager 启停重启流程
+- [x] Task 10：实现 Service Manager 启停重启流程
 - [ ] Task 11：实现 Rust command 白名单和 Settings patch 校验
 - [ ] Task 12：实现主窗口、Panel 窗口和 Settings 窗口管理
 - [ ] Task 13：实现 React Shell、Status、Settings 和前端 bridge
@@ -1072,11 +1075,12 @@ git commit -m "feat: add sidecar health checks"
 **Files:**
 - Create: `src-tauri/src/service/manager.rs`
 - Modify: `src-tauri/src/service/mod.rs`
+- Modify: `src-tauri/src/service/ownership.rs`
 - Test: `src-tauri/tests/service_manager.rs`
 
 **代码改动原因：** Host 是生命周期唯一权威，Bootstrap/Status 和菜单都只能发起动作，不能自行启动或停止 Sidecar。
 
-- [ ] **Step 1: 定义服务快照**
+- [x] **Step 1: 定义服务快照**
 
 ```rust
 #[derive(Clone, Debug, Serialize)]
@@ -1095,7 +1099,7 @@ pub struct ServiceSnapshot {
 }
 ```
 
-- [ ] **Step 2: 实现启动流程**
+- [x] **Step 2: 实现启动流程**
 
 `start_service()` 顺序：
 
@@ -1112,7 +1116,7 @@ pub struct ServiceSnapshot {
 10. 状态进入 Running。
 ```
 
-- [ ] **Step 3: 实现停止流程**
+- [x] **Step 3: 实现停止流程**
 
 `stop_service()` 顺序：
 
@@ -1127,7 +1131,7 @@ pub struct ServiceSnapshot {
 8. 状态进入 Stopped。
 ```
 
-- [ ] **Step 4: 实现 External 临时连接**
+- [x] **Step 4: 实现 External 临时连接**
 
 `connect_external()` 只在用户确认后调用：
 
@@ -1139,7 +1143,7 @@ pub struct ServiceSnapshot {
 5. 退出 Desktop 时不影响外部进程。
 ```
 
-- [ ] **Step 5: 添加最小集成测试**
+- [x] **Step 5: 添加最小集成测试**
 
 Run:
 
@@ -1153,9 +1157,10 @@ Expected:
 1. mock Sidecar 延迟 ready 后进入 Running。
 2. mock Sidecar 立即退出后进入 Error。
 3. stop_service 能让 mock Sidecar 退出并释放端口。
+4. External CliRelay-like 端口可连接但不会被 Desktop 接管或停止。
 ```
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add src-tauri/src/service/manager.rs src-tauri/tests/service_manager.rs src-tauri/src/service/mod.rs
