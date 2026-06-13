@@ -13,13 +13,20 @@ pub const MIN_SERVICE_PORT: u16 = 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DesktopSettings {
+    #[serde(alias = "schemaVersion")]
     pub schema_version: u32,
+    #[serde(alias = "firstRunCompleted")]
     pub first_run_completed: bool,
+    #[serde(alias = "autoStartApp")]
     pub auto_start_app: bool,
+    #[serde(alias = "autoStartService")]
     pub auto_start_service: bool,
+    #[serde(alias = "openPanelOnStart")]
     pub open_panel_on_start: bool,
     pub port: u16,
+    #[serde(alias = "autoCheckNewVersions")]
     pub auto_check_new_versions: bool,
+    #[serde(alias = "lastUpdateCheckAt")]
     pub last_update_check_at: Option<DateTime<Utc>>,
 }
 
@@ -315,6 +322,36 @@ mod tests {
         let serialized = serde_json::to_value(&settings).expect("序列化默认设置失败");
 
         assert_eq!(serialized["schema_version"], 1);
+    }
+
+    #[test]
+    fn loads_existing_camel_case_settings_file() {
+        let root = temp_dir("camel-case-settings");
+        let paths = DesktopPaths::for_test(root.path().join("app-data"), root.path().join("logs"));
+        fs::create_dir_all(&paths.state_dir).expect("创建 state 目录失败");
+        fs::write(
+            &paths.settings_file,
+            [
+                "{",
+                "  \"schemaVersion\": 1,",
+                "  \"firstRunCompleted\": false,",
+                "  \"autoStartApp\": false,",
+                "  \"autoStartService\": false,",
+                "  \"openPanelOnStart\": false,",
+                "  \"port\": 8318,",
+                "  \"autoCheckNewVersions\": false,",
+                "  \"lastUpdateCheckAt\": null",
+                "}",
+            ]
+            .join("\n"),
+        )
+        .expect("写入 camelCase settings 失败");
+
+        let settings = load_or_create_settings(&paths).expect("读取 camelCase settings 应成功");
+
+        assert_eq!(settings.schema_version, SETTINGS_SCHEMA_VERSION);
+        assert_eq!(settings.port, 8318);
+        assert!(!settings.open_panel_on_start);
     }
 
     #[test]
