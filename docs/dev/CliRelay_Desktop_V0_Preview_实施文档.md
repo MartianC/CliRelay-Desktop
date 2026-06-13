@@ -328,7 +328,7 @@ Expected: `pnpm typecheck` 能执行 TypeScript 检查。
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:5174",
     "frontendDist": "../dist"
   },
   "bundle": {

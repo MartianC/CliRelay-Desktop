@@ -10,9 +10,9 @@ export default defineConfig(async () => ({
 
   // 避免 Vite 清屏遮住 Rust 编译错误。
   clearScreen: false,
-  // Tauri devUrl 固定为 5173，端口不可用时直接失败。
+  // Tauri devUrl 固定为 5174，端口不可用时直接失败。
   server: {
-    port: 5173,
+    port: 5174,
     strictPort: true,
     host: host || false,
     hmr: host
