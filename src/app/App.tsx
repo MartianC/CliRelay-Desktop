@@ -16,6 +16,7 @@ function App() {
   const service = useServiceStore();
   const settings = useSettingsStore();
   const didRequestPanel = useRef(false);
+  const didRequestAutoStart = useRef(false);
 
   useEffect(() => {
     try {
@@ -40,13 +41,40 @@ function App() {
 
   useEffect(() => {
     if (
+      !shouldAutoStartService({
+        hasAttemptedAutoStart: didRequestAutoStart.current,
+        isBusy: service.isBusy,
+        panelOpened: service.panelOpened,
+        panelOpening: service.panelOpening,
+        snapshotStatus: service.snapshot?.status ?? null,
+        statusRequested,
+        windowRole,
+      })
+    ) {
+      return;
+    }
+
+    didRequestAutoStart.current = true;
+    void serviceStore.start();
+  }, [
+    service.isBusy,
+    service.panelOpened,
+    service.panelOpening,
+    service.snapshot?.status,
+    statusRequested,
+    windowRole,
+  ]);
+
+  useEffect(() => {
+    if (
       windowRole !== "main" ||
       statusRequested ||
       didRequestPanel.current ||
-      service.panelOpening ||
-      service.panelOpened ||
-      service.snapshot?.status !== "Running" ||
-      settings.settings?.openPanelOnStart === false
+      !shouldOpenPanelAfterStartup({
+        panelOpened: service.panelOpened,
+        panelOpening: service.panelOpening,
+        snapshotStatus: service.snapshot?.status ?? null,
+      })
     ) {
       return;
     }
@@ -59,7 +87,6 @@ function App() {
     service.panelOpened,
     service.panelOpening,
     service.snapshot?.status,
-    settings.settings?.openPanelOnStart,
     statusRequested,
     windowRole,
   ]);
@@ -108,107 +135,169 @@ function App() {
   return (
     <StartupShell
       status={service.snapshot?.status ?? "Starting"}
-      endpoint={service.snapshot?.endpoint ?? `http://127.0.0.1:${settings.settings?.port ?? 8317}`}
       panelOpening={service.panelOpening}
       panelOpened={service.panelOpened}
-      error={service.error}
       isBusy={service.isBusy}
+      startupFailed={Boolean(service.error)}
       onOpenStatus={() => setStatusRequested(true)}
-      onStart={serviceStore.start}
-      onOpenSettings={openSettings}
     />
   );
 }
 
 interface StartupShellProps {
   status: string;
-  endpoint: string;
   panelOpening: boolean;
   panelOpened: boolean;
-  error: string | null;
   isBusy: boolean;
+  startupFailed: boolean;
   onOpenStatus: () => void;
-  onStart: () => void | Promise<void>;
-  onOpenSettings: () => void | Promise<void>;
 }
 
-function StartupShell({
+export function StartupShell({
   status,
-  endpoint,
   panelOpening,
   panelOpened,
-  error,
   isBusy,
+  startupFailed,
   onOpenStatus,
-  onStart,
-  onOpenSettings,
 }: StartupShellProps) {
   const steps = [
-    ["准备运行目录", true],
-    ["启动 CliRelay", status !== "Stopped"],
-    ["等待 /manage", status === "Running" || panelOpening || panelOpened],
-    ["打开 Panel", panelOpening || panelOpened],
+    "准备运行环境",
+    "启动 CliRelay",
+    "等待 /manage",
+    "打开 Panel",
   ] as const;
+  const currentStep = getStartupStep(status, panelOpening, panelOpened, startupFailed);
+  const progress = `${Math.max(18, currentStep * 25)}%`;
+  const statusText =
+    startupFailed
+      ? "启动失败"
+      : panelOpening || panelOpened
+        ? "正在切换到 Panel"
+        : "启动服务中";
 
   return (
     <main className="app-shell startup-shell">
-      <section className="startup-card">
-        <div className="startup-top">
-          <div>
-            <p className="eyebrow">CliRelay Desktop</p>
-            <h1>正在打开管理面板</h1>
-            <p className="muted">
-              Desktop 负责本机服务生命周期；管理界面来自 CliRelay 的 /manage。
-            </p>
-          </div>
-          <span className={`status-pill status-${status.toLowerCase()}`}>{status}</span>
+      <section className="startup-content">
+        <div className="startup-app-icon" aria-hidden="true">
+          <span className="terminal-mark">&gt;_</span>
+          <span className={`icon-status-dot status-${status.toLowerCase()}`} />
         </div>
 
-        <div className="progress-track">
-          <span style={{ width: panelOpened ? "100%" : panelOpening ? "86%" : "48%" }} />
-        </div>
+        <h1>CliRelay Desktop</h1>
+        <p className="startup-status-text">{statusText}</p>
 
         <ol className="startup-steps">
-          {steps.map(([label, done]) => (
-            <li key={label} className={done ? "done" : undefined}>
-              <span />
-              {label}
-            </li>
-          ))}
+          {steps.map((label, index) => {
+            const stepNumber = index + 1;
+            const state =
+              stepNumber < currentStep
+                ? "done"
+                : stepNumber === currentStep
+                  ? "active"
+                  : "pending";
+
+            return (
+              <li key={label} className={state}>
+                <span />
+                {label}
+              </li>
+            );
+          })}
         </ol>
 
-        <div className="startup-footer">
-          <div>
-            <span className="label">API Base URL</span>
-            <strong className="mono">{endpoint}</strong>
-          </div>
-          <div className="button-row">
-            <button type="button" onClick={() => void onStart()} disabled={isBusy}>
-              启动 CliRelay
-            </button>
-            <button type="button" className="secondary" onClick={onOpenStatus}>
-              打开状态
-            </button>
-            <button type="button" className="ghost" onClick={() => void onOpenSettings()}>
-              设置
-            </button>
-          </div>
+        <div className="progress-track">
+          <span style={{ width: progress }} />
         </div>
 
-        {panelOpened ? (
-          <div className="panel-placeholder">
-            <div className="panel-sidebar" />
-            <div className="panel-content">
-              <span>Panel 已在零权限 WebView 中打开</span>
-              <strong>/manage</strong>
-            </div>
-          </div>
-        ) : null}
+        <div className="startup-step-count">第 {currentStep} / 4 步</div>
 
-        {error ? <p className="inline-error">{error}</p> : null}
+        <div className="startup-footer">
+          <div className="button-row">
+            {startupFailed ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={isBusy}
+                onClick={onOpenStatus}
+              >
+                打开状态
+              </button>
+            ) : null}
+          </div>
+        </div>
       </section>
     </main>
   );
+}
+
+function getStartupStep(
+  status: string,
+  panelOpening: boolean,
+  panelOpened: boolean,
+  startupFailed: boolean,
+): number {
+  if (startupFailed) {
+    return 2;
+  }
+
+  if (panelOpening || panelOpened) {
+    return 4;
+  }
+
+  if (status === "Running") {
+    return 3;
+  }
+
+  if (status === "Starting") {
+    return 2;
+  }
+
+  return 1;
+}
+
+interface AutoStartInput {
+  hasAttemptedAutoStart: boolean;
+  isBusy: boolean;
+  panelOpened: boolean;
+  panelOpening: boolean;
+  snapshotStatus: string | null;
+  statusRequested: boolean;
+  windowRole: WindowRole;
+}
+
+export function shouldAutoStartService({
+  hasAttemptedAutoStart,
+  isBusy,
+  panelOpened,
+  panelOpening,
+  snapshotStatus,
+  statusRequested,
+  windowRole,
+}: AutoStartInput): boolean {
+  return (
+    windowRole === "main" &&
+    !statusRequested &&
+    !hasAttemptedAutoStart &&
+    !isBusy &&
+    !panelOpening &&
+    !panelOpened &&
+    snapshotStatus === "Stopped"
+  );
+}
+
+interface OpenPanelAfterStartupInput {
+  panelOpened: boolean;
+  panelOpening: boolean;
+  snapshotStatus: string | null;
+}
+
+export function shouldOpenPanelAfterStartup({
+  panelOpened,
+  panelOpening,
+  snapshotStatus,
+}: OpenPanelAfterStartupInput): boolean {
+  return !panelOpening && !panelOpened && snapshotStatus === "Running";
 }
 
 async function hideShellWindow(): Promise<void> {

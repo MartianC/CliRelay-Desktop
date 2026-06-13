@@ -57,7 +57,7 @@ describe("service store", () => {
 
   test("只有非 Running 状态默认进入恢复状态页", () => {
     expect(shouldUseRecoveryView("Running")).toBe(false);
-    expect(shouldUseRecoveryView("Stopped")).toBe(true);
+    expect(shouldUseRecoveryView("Stopped")).toBe(false);
     expect(shouldUseRecoveryView("Unhealthy")).toBe(true);
     expect(shouldUseRecoveryView("Error")).toBe(true);
     expect(shouldUseRecoveryView("External")).toBe(true);

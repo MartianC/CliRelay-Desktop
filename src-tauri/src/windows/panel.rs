@@ -7,6 +7,10 @@ pub enum PanelNavigationDecision {
 
 pub const PANEL_WINDOW_LABEL: &str = "panel";
 
+pub fn panel_window_title() -> &'static str {
+    crate::APP_DISPLAY_NAME
+}
+
 pub fn panel_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/manage")
 }
@@ -53,7 +57,7 @@ pub fn show_panel_window<R: tauri::Runtime>(
 
     let window =
         WebviewWindowBuilder::new(app, PANEL_WINDOW_LABEL, WebviewUrl::External(target_url))
-            .title("CliRelay Panel")
+            .title(panel_window_title())
             .inner_size(1200.0, 800.0)
             .min_inner_size(900.0, 600.0)
             .center()

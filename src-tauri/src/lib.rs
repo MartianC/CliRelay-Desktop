@@ -6,6 +6,8 @@ pub mod service;
 pub mod settings;
 pub mod windows;
 
+pub const APP_DISPLAY_NAME: &str = "CliRelay Desktop";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()

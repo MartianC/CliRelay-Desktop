@@ -227,6 +227,11 @@ mod tests {
     }
 
     #[test]
+    fn panel_window_uses_app_display_title() {
+        assert_eq!(panel::panel_window_title(), "CliRelay Desktop");
+    }
+
+    #[test]
     fn panel_navigation_allows_only_current_local_panel_origin() {
         let cases = [
             (

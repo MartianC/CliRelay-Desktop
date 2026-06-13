@@ -44,7 +44,7 @@ const defaultState: ServiceStoreState = {
 };
 
 export function shouldUseRecoveryView(status: ServiceStatus): boolean {
-  return ["Stopped", "Stopping", "Unhealthy", "External", "Error"].includes(status);
+  return ["Stopping", "Unhealthy", "External", "Error"].includes(status);
 }
 
 export function createServiceStore(commands: ServiceCommands): ServiceStore {
