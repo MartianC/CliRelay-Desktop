@@ -1382,6 +1382,30 @@ git commit -m "feat: manage desktop windows"
 
 **代码改动原因：** V0 Shell UI 只展示状态和恢复路径，不复制上游 `/manage` 功能；Settings 只覆盖计划允许的 General、Service、Update、About 区块。
 
+- [ ] **Step 0: image2 页面设计审核门槛**
+
+所有页面设计必须先通过 image2 生成图片稿，并经人工审核通过后再复刻实施。
+
+适用范围：
+
+```text
+主窗口 Shell
+StatusView
+SettingsView
+菜单/托盘相关可视状态
+任何后续新增页面、弹窗或设置区块
+```
+
+执行规则：
+
+```text
+1. 先生成图片稿，不直接写页面代码。
+2. 图片稿必须覆盖目标页面的关键状态。
+3. 用户确认图片稿通过后，才按图复刻实现。
+4. 实施阶段不得自行改变已确认的布局、层级、主视觉和关键交互。
+5. 如实现中发现设计不可行，返回 image2 重新出图审核。
+```
+
 - [ ] **Step 1: 定义前端类型**
 
 `src/bridge/types.ts` 与 Rust JSON 对齐：
