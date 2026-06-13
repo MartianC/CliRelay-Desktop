@@ -24,16 +24,18 @@
 | Task 4 | `032e434 feat: fetch verified upstream assets` | 已完成 |
 | Task 4 修正 | `c2cad66 chore: ignore fetched upstream assets` | 已完成 |
 | Task 5 | `c71d25f feat: add desktop paths and settings` | 已完成 |
+| Task 6 | `d4eae19 feat: add service state machine` | 已完成 |
 
-**当前结论：** Task 1 到 Task 5 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成和本地 panel 复制已经具备单元测试覆盖。
+**当前结论：** Task 1 到 Task 6 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制和服务状态机已经具备单元测试覆盖。
 
-**下一步：** 从 Task 6 开始实现服务状态机。运行时 Sidecar 启动、External/Owned 判定、健康检查、退出清理和 UI 接入仍在后续 Task 中完成。
+**下一步：** 从 Task 7 开始实现日志轮转、日志脱敏和 Sidecar stdout/stderr 采集。运行时 Sidecar 启动、External/Owned 判定、健康检查、退出清理和 UI 接入仍在后续 Task 中完成。
 
 **最近验证：**
 
 ```bash
 pnpm test
 cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml service::state
 cargo test --manifest-path src-tauri/Cargo.toml settings
 cargo test --manifest-path src-tauri/Cargo.toml paths
 pnpm upstream:verify
@@ -41,7 +43,7 @@ git ls-files src-tauri/binaries src-tauri/resources/config.example.yaml src-taur
 git check-ignore -v src-tauri/binaries/clirelay-aarch64-apple-darwin src-tauri/resources/config.example.yaml src-tauri/resources/panel/manage.html src-tauri/resources/panel/assets/panel-chunk.js
 ```
 
-Expected: `pnpm test` 通过 6 个用例；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 9 个 Rust 用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
+Expected: `pnpm test` 通过 6 个用例；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 11 个 Rust 用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
 
 ---
 
@@ -202,7 +204,7 @@ CliRelay-Desktop/
 - [x] Task 3：锁定上游 CliRelay 和 codeProxy Release assets
 - [x] Task 4：实现上游资产下载、校验和放置脚本
 - [x] Task 5：实现路径、设置和默认配置生成
-- [ ] Task 6：实现服务状态机和表驱动测试
+- [x] Task 6：实现服务状态机和表驱动测试
 - [ ] Task 7：实现日志轮转、日志脱敏和 Sidecar stdout/stderr 采集
 - [ ] Task 8：实现进程归属、runtime-state 和残留接管
 - [ ] Task 9：实现健康检查、Panel ready 判定和 External 探测
@@ -735,7 +737,7 @@ Expected: 只包含路径、设置、默认配置相关变更。
 
 **代码改动原因：** 菜单、窗口、按钮和退出行为都依赖统一状态机；先用表驱动测试固定合法转换，避免 UI 和 Service Manager 各自判断状态。
 
-- [ ] **Step 1: 定义核心状态**
+- [x] **Step 1: 定义核心状态**
 
 `state.rs` 定义：
 
@@ -771,7 +773,7 @@ pub enum ServiceEvent {
 }
 ```
 
-- [ ] **Step 2: 实现转换函数**
+- [x] **Step 2: 实现转换函数**
 
 ```rust
 pub fn transition(status: ServiceStatus, event: ServiceEvent) -> Result<ServiceStatus, StateTransitionError>
@@ -799,7 +801,7 @@ Error + RestartRequested -> Starting
 Error + CleanupError -> Stopped
 ```
 
-- [ ] **Step 3: 添加表驱动测试**
+- [x] **Step 3: 添加表驱动测试**
 
 测试表覆盖上面的每一行，并额外覆盖：
 
@@ -818,7 +820,7 @@ cargo test --manifest-path src-tauri/Cargo.toml service::state
 
 Expected: 合法转换返回目标状态，非法转换返回 `StateTransitionError`。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src-tauri/src/service src-tauri/src/lib.rs
