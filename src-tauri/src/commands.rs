@@ -142,6 +142,18 @@ impl DesktopCommandState {
     pub fn service_snapshot(&self) -> ServiceSnapshot {
         self.manager.snapshot()
     }
+
+    pub fn start_service(&mut self) -> Result<ServiceSnapshot, ManagerError> {
+        self.manager.start_service()
+    }
+
+    pub fn stop_service(&mut self) -> Result<ServiceSnapshot, ManagerError> {
+        self.manager.stop_service()
+    }
+
+    pub fn restart_service(&mut self) -> Result<ServiceSnapshot, ManagerError> {
+        self.manager.restart_service()
+    }
 }
 
 struct ResourcePaths {
@@ -287,26 +299,26 @@ pub fn get_service_snapshot(
 
 #[tauri::command]
 pub fn start_service(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SharedDesktopCommandState>,
 ) -> Result<ServiceSnapshot, CommandError> {
-    let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
-    state.manager.start_service().map_err(CommandError::from)
+    run_service_command(&app, state, DesktopCommandState::start_service)
 }
 
 #[tauri::command]
 pub fn stop_service(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SharedDesktopCommandState>,
 ) -> Result<ServiceSnapshot, CommandError> {
-    let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
-    state.manager.stop_service().map_err(CommandError::from)
+    run_service_command(&app, state, DesktopCommandState::stop_service)
 }
 
 #[tauri::command]
 pub fn restart_service(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SharedDesktopCommandState>,
 ) -> Result<ServiceSnapshot, CommandError> {
-    let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
-    state.manager.restart_service().map_err(CommandError::from)
+    run_service_command(&app, state, DesktopCommandState::restart_service)
 }
 
 #[tauri::command]
@@ -398,6 +410,23 @@ pub fn check_for_updates() -> Result<(), CommandError> {
 fn open_path(path: &Path) -> Result<(), CommandError> {
     tauri_plugin_opener::open_path(path, None::<&str>)
         .map_err(|error| CommandError::Open(error.to_string()))
+}
+
+fn run_service_command(
+    app: &tauri::AppHandle,
+    state: tauri::State<'_, SharedDesktopCommandState>,
+    action: fn(&mut DesktopCommandState) -> Result<ServiceSnapshot, ManagerError>,
+) -> Result<ServiceSnapshot, CommandError> {
+    let (result, snapshot) = {
+        let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+        let result = action(&mut state);
+        let snapshot = state.service_snapshot();
+
+        (result, snapshot)
+    };
+
+    let _ = crate::tray::refresh_tray_menu(app, snapshot.status);
+    result.map_err(CommandError::from)
 }
 
 fn first_existing_path<const N: usize>(paths: [PathBuf; N]) -> PathBuf {

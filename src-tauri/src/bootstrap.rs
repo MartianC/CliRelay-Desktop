@@ -13,6 +13,7 @@ pub fn setup<R: tauri::Runtime>(app: &mut tauri::App<R>) -> Result<(), Box<dyn s
     app.manage(Mutex::new(windows::DesktopWindowState::new(paths.clone())));
 
     windows::main::configure_main_window(app.handle(), &paths)?;
+    crate::tray::setup(app.handle())?;
 
     Ok(())
 }

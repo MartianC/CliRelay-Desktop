@@ -9,10 +9,18 @@ fn tauri_app_display_name_is_consistent() {
     let config = tauri_config();
     let app_name = Some("CliRelay Desktop");
 
-    assert_eq!(config.pointer("/productName").and_then(Value::as_str), app_name);
-    assert_eq!(config.pointer("/mainBinaryName").and_then(Value::as_str), app_name);
     assert_eq!(
-        config.pointer("/bundle/macOS/bundleName").and_then(Value::as_str),
+        config.pointer("/productName").and_then(Value::as_str),
+        app_name
+    );
+    assert_eq!(
+        config.pointer("/mainBinaryName").and_then(Value::as_str),
+        app_name
+    );
+    assert_eq!(
+        config
+            .pointer("/bundle/macOS/bundleName")
+            .and_then(Value::as_str),
         app_name
     );
 }

@@ -137,19 +137,22 @@ pub fn handle_window_event<R: tauri::Runtime>(
 }
 
 pub fn handle_run_event<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: tauri::RunEvent) {
-    #[cfg(target_os = "macos")]
-    if matches!(
-        event,
+    match event {
+        tauri::RunEvent::ExitRequested { code, api, .. } => {
+            if code.is_none() {
+                api.prevent_exit();
+                crate::tray::request_desktop_exit(app);
+            }
+        }
+        #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen {
             has_visible_windows: false,
             ..
+        } => {
+            let _ = restore_after_dock_click(app);
         }
-    ) {
-        let _ = restore_after_dock_click(app);
+        _ => {}
     }
-
-    #[cfg(not(target_os = "macos"))]
-    let _ = (app, event);
 }
 
 pub fn restore_after_dock_click<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {

@@ -4,6 +4,7 @@ pub mod paths;
 pub mod platform;
 pub mod service;
 pub mod settings;
+pub mod tray;
 pub mod windows;
 
 pub const APP_DISPLAY_NAME: &str = "CliRelay Desktop";

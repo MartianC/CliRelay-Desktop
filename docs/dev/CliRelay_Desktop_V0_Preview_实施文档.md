@@ -227,7 +227,7 @@ CliRelay-Desktop/
 - [x] Task 11：实现 Rust command 白名单和 Settings patch 校验
 - [ ] Task 12：实现主窗口、Panel 窗口和 Settings 窗口管理
 - [ ] Task 13：实现 React Shell、Status、Settings 和前端 bridge
-- [ ] Task 14：实现菜单栏、Dock 恢复和退出行为
+- [x] Task 14：实现菜单栏、Dock 恢复和退出行为
 - [ ] Task 15：实现 Preview 更新检查
 - [ ] Task 16：补齐 mock Sidecar 集成测试 8 个必选场景
 - [ ] Task 17：实现 PR CI
@@ -1547,45 +1547,43 @@ git commit -m "feat: add desktop shell ui"
 ### Task 14: 实现菜单栏、Dock 和退出行为
 
 **Files:**
+- Modify: `src-tauri/Cargo.toml`
 - Create: `src-tauri/src/tray.rs`
 - Modify: `src-tauri/src/bootstrap.rs`
+- Modify: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`
+- Modify: `src-tauri/src/windows/mod.rs`
 - Test: `src-tauri/src/tray.rs`
 
 **代码改动原因：** V0 关闭主窗口后服务继续运行，菜单栏是服务管理入口；退出 Desktop 必须停止 owned Sidecar，不能影响 External。
 
-- [ ] **Step 1: 实现菜单结构**
+- [x] **Step 1: 实现菜单结构**
 
 菜单顺序：
 
 ```text
 CliRelay ● 运行中
 打开管理面板
-显示状态
 设置
-复制 API Base URL
-复制 OpenAI /v1 URL
-启动服务
-停止服务
-重新启动
+服务动作区（按 Step 2 只显示启动服务、停止服务、重新启动中的可见项）
 打开数据目录
 打开日志目录
 退出 CliRelay Desktop
 ```
 
-- [ ] **Step 2: 实现动作启用规则**
+- [x] **Step 2: 实现服务动作显示规则**
 
 ```text
-Stopped: 启动启用，停止禁用，重启禁用
-Starting: 三个服务动作全部禁用
-Running owned: 启动禁用，停止启用，重启启用
-Unhealthy owned: 启动禁用，停止启用，重启启用
-Error: 启动启用，停止禁用，重启启用
-Stopping: 三个服务动作全部禁用
-External: 启动禁用，停止禁用，重启禁用，复制地址启用
+Stopped: 只显示启动服务
+Starting: 不显示启动服务、停止服务、重新启动
+Running owned: 只显示停止服务、重新启动
+Unhealthy owned: 只显示停止服务、重新启动
+Error: 只显示启动服务、重新启动
+Stopping: 不显示启动服务、停止服务、重新启动
+External: 不显示启动服务、停止服务、重新启动
 ```
 
-- [ ] **Step 3: 实现退出 Desktop**
+- [x] **Step 3: 实现退出 Desktop**
 
 ```text
 1. owned Running/Unhealthy -> 先 stop_service。
@@ -1595,7 +1593,7 @@ External: 启动禁用，停止禁用，重启禁用，复制地址启用
 5. Stopped/Error -> 直接退出。
 ```
 
-- [ ] **Step 4: 添加测试**
+- [x] **Step 4: 添加测试**
 
 Run:
 
@@ -1603,9 +1601,9 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml tray
 ```
 
-Expected: 每个状态下菜单项启用规则符合表格。
+Expected: 每个状态下菜单项显示规则符合表格，且不会出现“显示状态”、复制 API Base URL 或复制 OpenAI /v1 URL 菜单项。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src-tauri/src/tray.rs src-tauri/src/bootstrap.rs src-tauri/src/lib.rs
