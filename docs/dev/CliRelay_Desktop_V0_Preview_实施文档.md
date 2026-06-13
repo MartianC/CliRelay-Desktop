@@ -23,7 +23,7 @@
 | Task 3 | `a1194c6 feat: lock upstream release assets` | 已完成 |
 | Task 4 | `032e434 feat: fetch verified upstream assets` | 已完成 |
 | Task 4 修正 | `c2cad66 chore: ignore fetched upstream assets` | 已完成 |
-| Task 5 | `待提交 feat: add desktop paths and settings` | 已完成 |
+| Task 5 | `c71d25f feat: add desktop paths and settings` | 已完成 |
 
 **当前结论：** Task 1 到 Task 5 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成和本地 panel 复制已经具备单元测试覆盖。
 
