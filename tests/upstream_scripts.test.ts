@@ -1,7 +1,14 @@
+import { execFileSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
 import upstreamLock from "../upstream-lock.json";
 
 const sha256Pattern = /^[a-f0-9]{64}$/;
+const ignoredUpstreamOutputs = [
+  "src-tauri/binaries/clirelay-aarch64-apple-darwin",
+  "src-tauri/resources/config.example.yaml",
+  "src-tauri/resources/panel/manage.html",
+  "src-tauri/resources/panel/assets/panel-chunk.js",
+];
 
 describe("upstream-lock.json", () => {
   test("can be parsed", () => {
@@ -37,5 +44,13 @@ describe("upstream-lock.json", () => {
 
   test("uses github.com for the codeProxy download URL", () => {
     expect(new URL(upstreamLock.codeProxy.asset.downloadUrl).host).toBe("github.com");
+  });
+
+  test("ignores fetched upstream outputs", () => {
+    for (const outputPath of ignoredUpstreamOutputs) {
+      expect(() => {
+        execFileSync("git", ["check-ignore", "--quiet", outputPath]);
+      }).not.toThrow();
+    }
   });
 });

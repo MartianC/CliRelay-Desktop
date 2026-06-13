@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# 上游 fetch 输出
+src-tauri/binaries/*
+src-tauri/resources/config.example.yaml
+src-tauri/resources/panel/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
