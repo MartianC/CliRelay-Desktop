@@ -26,16 +26,18 @@
 | Task 5 | `c71d25f feat: add desktop paths and settings` | 已完成 |
 | Task 6 | `d4eae19 feat: add service state machine` | 已完成 |
 | Task 7 | `c1bc7a0 feat: add rotating logs` | 已完成 |
+| Task 8 | `c6b0489 feat: add sidecar ownership checks` | 已完成 |
 
-**当前结论：** Task 1 到 Task 7 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏和 CliRelay 原始输出采集已经具备单元测试覆盖。
+**当前结论：** Task 1 到 Task 8 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏、CliRelay 原始输出采集、runtime-state 和 Sidecar 归属判断已经具备单元测试覆盖。
 
-**下一步：** 从 Task 8 开始实现进程归属、runtime-state 和残留接管。运行时 Sidecar 启动、External/Owned 判定、健康检查、退出清理和 UI 接入仍在后续 Task 中完成。
+**下一步：** 从 Task 9 开始实现健康检查、Panel ready 判定和 External 探测。运行时 Sidecar 启动、退出清理和 UI 接入仍在后续 Task 中完成。
 
 **最近验证：**
 
 ```bash
 pnpm test
 cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml service::ownership
 cargo test --manifest-path src-tauri/Cargo.toml service::logs
 cargo test --manifest-path src-tauri/Cargo.toml service::state
 cargo test --manifest-path src-tauri/Cargo.toml settings
@@ -45,7 +47,7 @@ git ls-files src-tauri/binaries src-tauri/resources/config.example.yaml src-taur
 git check-ignore -v src-tauri/binaries/clirelay-aarch64-apple-darwin src-tauri/resources/config.example.yaml src-tauri/resources/panel/manage.html src-tauri/resources/panel/assets/panel-chunk.js
 ```
 
-Expected: `pnpm test` 通过 6 个用例；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 18 个 Rust 用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
+Expected: `pnpm test` 通过 6 个用例；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 25 个 Rust 用例；`service::ownership` 过滤器通过 7 个用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
 
 ---
 
@@ -208,7 +210,7 @@ CliRelay-Desktop/
 - [x] Task 5：实现路径、设置和默认配置生成
 - [x] Task 6：实现服务状态机和表驱动测试
 - [x] Task 7：实现日志轮转、日志脱敏和 Sidecar stdout/stderr 采集
-- [ ] Task 8：实现进程归属、runtime-state 和残留接管
+- [x] Task 8：实现进程归属、runtime-state 和残留接管
 - [ ] Task 9：实现健康检查、Panel ready 判定和 External 探测
 - [ ] Task 10：实现 Service Manager 启停重启流程
 - [ ] Task 11：实现 Rust command 白名单和 Settings patch 校验
@@ -912,7 +914,7 @@ git commit -m "feat: add rotating logs"
 
 **代码改动原因：** Desktop 只能停止自己拥有的 Sidecar。端口冲突、崩溃恢复和退出清理都必须先通过归属证据。
 
-- [ ] **Step 1: 定义 runtime-state**
+- [x] **Step 1: 定义 runtime-state**
 
 ```rust
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -927,7 +929,7 @@ pub struct RuntimeState {
 }
 ```
 
-- [ ] **Step 2: 定义归属证据**
+- [x] **Step 2: 定义归属证据**
 
 ```rust
 pub enum ProcessOwnership {
@@ -947,7 +949,7 @@ pub enum ProcessOwnership {
 4. 可执行 SHA-256 匹配。
 ```
 
-- [ ] **Step 3: 实现 macOS 查询**
+- [x] **Step 3: 实现 macOS 查询**
 
 `platform/macos.rs` 提供：
 
@@ -960,7 +962,7 @@ pub fn kill_pid(pid: u32) -> Result<()>;
 
 Expected: `terminate_pid` 只发送 SIGTERM，`kill_pid` 只发送 SIGKILL，调用方必须先确认 `Owned`。
 
-- [ ] **Step 4: 添加测试**
+- [x] **Step 4: 添加测试**
 
 Run:
 
@@ -977,7 +979,7 @@ Expected:
 4. 四项证据匹配 -> Owned。
 ```
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src-tauri/src/service/ownership.rs src-tauri/src/platform src-tauri/src/service/mod.rs
