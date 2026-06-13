@@ -33,6 +33,7 @@ pub const SAFE_COMMAND_NAMES: [&str; 13] = [
 pub enum CommandError {
     NotInitialized,
     StateLockPoisoned,
+    PanelNotReady(ServiceStatus),
     ForbiddenSettingsField(String),
     InvalidSettingsPatch(String),
     InvalidPort(u16),
@@ -41,6 +42,7 @@ pub enum CommandError {
     Settings(String),
     Manager(String),
     Path(String),
+    Window(String),
     Open(String),
 }
 
@@ -49,6 +51,9 @@ impl fmt::Display for CommandError {
         match self {
             Self::NotInitialized => write!(formatter, "Desktop command state 尚未初始化"),
             Self::StateLockPoisoned => write!(formatter, "Desktop command state 锁已损坏"),
+            Self::PanelNotReady(status) => {
+                write!(formatter, "Panel 尚未 ready，当前服务状态: {status:?}")
+            }
             Self::ForbiddenSettingsField(field) => write!(formatter, "不允许修改设置字段: {field}"),
             Self::InvalidSettingsPatch(message) => write!(formatter, "设置 patch 无效: {message}"),
             Self::InvalidPort(port) => write!(formatter, "端口必须在 1024-65535 范围内: {port}"),
@@ -57,6 +62,7 @@ impl fmt::Display for CommandError {
             Self::Settings(message) => write!(formatter, "{message}"),
             Self::Manager(message) => write!(formatter, "{message}"),
             Self::Path(message) => write!(formatter, "{message}"),
+            Self::Window(message) => write!(formatter, "{message}"),
             Self::Open(message) => write!(formatter, "{message}"),
         }
     }
@@ -79,6 +85,12 @@ impl From<SettingsError> for CommandError {
 impl From<ManagerError> for CommandError {
     fn from(error: ManagerError) -> Self {
         Self::Manager(error.to_string())
+    }
+}
+
+impl From<tauri::Error> for CommandError {
+    fn from(error: tauri::Error) -> Self {
+        Self::Window(error.to_string())
     }
 }
 
@@ -121,6 +133,14 @@ impl DesktopCommandState {
         let manager = ServiceManager::new(manager_config);
 
         Ok(Self::new(paths, settings, manager))
+    }
+
+    pub fn paths(&self) -> &crate::paths::DesktopPaths {
+        &self.paths
+    }
+
+    pub fn service_snapshot(&self) -> ServiceSnapshot {
+        self.manager.snapshot()
     }
 }
 
@@ -291,14 +311,26 @@ pub fn restart_service(
 
 #[tauri::command]
 pub fn open_panel(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SharedDesktopCommandState>,
 ) -> Result<String, CommandError> {
-    let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
-    Ok(state.manager.snapshot().panel_url)
+    let snapshot = {
+        let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+        state.manager.snapshot()
+    };
+
+    if snapshot.status != ServiceStatus::Running {
+        return Err(CommandError::PanelNotReady(snapshot.status));
+    }
+
+    crate::windows::panel::show_panel_window(&app, snapshot.port)?;
+
+    Ok(snapshot.panel_url)
 }
 
 #[tauri::command]
-pub fn open_settings() -> Result<(), CommandError> {
+pub fn open_settings(app: tauri::AppHandle) -> Result<(), CommandError> {
+    crate::windows::settings::show_settings_window(&app)?;
     Ok(())
 }
 

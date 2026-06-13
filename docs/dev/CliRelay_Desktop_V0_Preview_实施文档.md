@@ -1307,7 +1307,7 @@ git commit -m "feat: add safe desktop commands"
 
 **代码改动原因：** 用户感知是单主窗口，但 Shell/Status 与 Panel 必须安全隔离。Settings 是独立普通窗口并保持单实例。
 
-- [ ] **Step 1: 实现主窗口规则**
+- [x] **Step 1: 实现主窗口规则**
 
 主窗口：
 
@@ -1319,7 +1319,7 @@ min size = 900 x 600
 外接屏位置失效时居中
 ```
 
-- [ ] **Step 2: 实现 Panel WebView**
+- [x] **Step 2: 实现 Panel WebView**
 
 Panel URL：
 
@@ -1337,7 +1337,7 @@ http://127.0.0.1:{port}/manage
 5. file://、外部 HTTP、其他 localhost 端口默认阻止。
 ```
 
-- [ ] **Step 3: 实现 Settings 单实例**
+- [x] **Step 3: 实现 Settings 单实例**
 
 Settings：
 
@@ -1348,7 +1348,7 @@ default size = 720 x 560
 使用 settings capability
 ```
 
-- [ ] **Step 4: 实现 Dock 恢复规则**
+- [x] **Step 4: 实现 Dock 恢复规则**
 
 Dock 点击：
 
@@ -1359,12 +1359,38 @@ Starting/Unhealthy/Error/External/Stopped -> 显示 Status
 Dock 点击不隐式启动服务
 ```
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src-tauri/src/windows src-tauri/src/bootstrap.rs src-tauri/src/lib.rs
 git commit -m "feat: manage desktop windows"
 ```
+
+Implemented:
+
+```text
+主窗口 label 固定为 main，默认 1200 x 800，最小 900 x 600。
+主窗口关闭按钮只隐藏窗口；移动/缩放后保存到 state/desktop-window-state.json。
+保存 bounds 的原点若不在当前显示器工作区内，启动时居中。
+Panel window label 固定为 panel，URL 为 http://127.0.0.1:{port}/manage。
+open_panel 仅在服务 Running 后创建/显示 Panel；已有 Panel 会导航到当前端口。
+Panel 导航只允许当前 127.0.0.1/localhost 端口，外部 HTTPS 用系统浏览器打开，其余阻止。
+Settings window label 固定为 settings，720 x 560，重复打开聚焦已有窗口。
+macOS Dock Reopen 根据运行态 last user surface 恢复 Panel 或 Status；不会隐式启动服务。
+```
+
+Verification:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml windows
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
+cargo test --manifest-path src-tauri/Cargo.toml
+pnpm test
+pnpm build
+pnpm tauri dev
+```
+
+Expected: `windows` 过滤器通过 6 个用例；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 43 个单元用例和 4 个 Service Manager 集成用例；`pnpm test` 通过 6 个用例；`pnpm build` 通过；`pnpm tauri dev` 在 `http://localhost:5174/` 启动 Vite 并启动 Tauri debug app，无启动 panic。
 
 ### Task 13: 实现 React Shell、Status、Settings 和 bridge
 

@@ -1,21 +1,17 @@
+pub mod bootstrap;
 pub mod commands;
 pub mod paths;
 pub mod platform;
 pub mod service;
 pub mod settings;
-
-use std::sync::Mutex;
-use tauri::Manager;
+pub mod windows;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            let state = commands::DesktopCommandState::from_app(app.handle())?;
-            app.manage(Mutex::new(state));
-            Ok(())
-        })
+        .setup(bootstrap::setup)
+        .on_window_event(windows::handle_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::get_service_snapshot,
             commands::start_service,
@@ -31,6 +27,8 @@ pub fn run() {
             commands::update_desktop_settings,
             commands::check_for_updates,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    app.run(windows::handle_run_event);
 }
