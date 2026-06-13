@@ -1,49 +1,67 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type ServiceSnapshot = {
+  status: string;
+  port: number;
+  endpoint: string;
+  panel_url: string;
+  ownership: string;
+};
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+function App() {
+  const [snapshot, setSnapshot] = useState<ServiceSnapshot | null>(null);
+  const [error, setError] = useState("");
+
+  async function refreshSnapshot() {
+    setError("");
+    try {
+      setSnapshot(await invoke<ServiceSnapshot>("get_service_snapshot"));
+    } catch (caught) {
+      setError(String(caught));
+    }
   }
 
   return (
     <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+      <section className="status-panel">
+        <div>
+          <h1>CliRelay Desktop</h1>
+          <p>服务状态</p>
+        </div>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+        <button type="button" onClick={refreshSnapshot}>
+          刷新
+        </button>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+        {snapshot ? (
+          <dl>
+            <div>
+              <dt>状态</dt>
+              <dd>{snapshot.status}</dd>
+            </div>
+            <div>
+              <dt>端口</dt>
+              <dd>{snapshot.port}</dd>
+            </div>
+            <div>
+              <dt>入口</dt>
+              <dd>{snapshot.endpoint}</dd>
+            </div>
+            <div>
+              <dt>面板</dt>
+              <dd>{snapshot.panel_url}</dd>
+            </div>
+            <div>
+              <dt>归属</dt>
+              <dd>{snapshot.ownership}</dd>
+            </div>
+          </dl>
+        ) : null}
+
+        {error ? <p className="error">{error}</p> : null}
+      </section>
     </main>
   );
 }

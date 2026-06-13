@@ -199,6 +199,10 @@ impl ServiceManager {
         }
     }
 
+    pub fn update_settings(&mut self, settings: DesktopSettings) {
+        self.config.settings = settings;
+    }
+
     pub fn start_service(&mut self) -> Result<ServiceSnapshot, ManagerError> {
         if !matches!(self.status, ServiceStatus::Stopped | ServiceStatus::Error) {
             return Err(ManagerError::InvalidStatus(self.status.clone()));

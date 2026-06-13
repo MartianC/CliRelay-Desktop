@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "panel",
+  "description": "Panel webview 不授予 Tauri、shell、fs、clipboard 或 process 权限。",
+  "windows": ["panel"],
+  "permissions": []
+}
