@@ -1,4 +1,5 @@
 pub mod paths;
+pub mod service;
 pub mod settings;
 
 #[tauri::command]
