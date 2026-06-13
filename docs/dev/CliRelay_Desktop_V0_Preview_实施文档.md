@@ -29,17 +29,20 @@
 | Task 8 | `c6b0489 feat: add sidecar ownership checks` | 已完成 |
 | Task 9 | `38db95c feat: add service health probes` | 已完成 |
 | Task 10 | `0973de0 feat: manage sidecar lifecycle` | 已完成 |
+| Task 11 | `0624486 feat: add safe desktop commands` | 已完成 |
 
-**当前结论：** Task 1 到 Task 10 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏、CliRelay 原始输出采集、runtime-state、Sidecar 归属判断、健康检查、Panel ready、External 端口探测和 Service Manager 启停重启流程已经具备测试覆盖。
+**当前结论：** Task 1 到 Task 11 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏、CliRelay 原始输出采集、runtime-state、Sidecar 归属判断、健康检查、Panel ready、External 端口探测、Service Manager 启停重启流程、Rust command 白名单、Settings patch 校验和窗口 capability 初始隔离已经具备测试覆盖。
 
-**下一步：** 从 Task 11 开始实现 Rust command 白名单和 Settings patch 校验。窗口管理、React Shell、菜单栏和发布 CI 仍在后续 Task 中完成。
+**下一步：** 从 Task 12 开始实现主窗口、Panel 窗口和 Settings 窗口管理。完整 React Shell、菜单栏和发布 CI 仍在后续 Task 中完成。
 
 **最近验证：**
 
 ```bash
 pnpm test
+pnpm build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml commands
 cargo test --manifest-path src-tauri/Cargo.toml --test service_manager
 cargo test --manifest-path src-tauri/Cargo.toml service::health
 cargo test --manifest-path src-tauri/Cargo.toml service::ownership
@@ -48,11 +51,13 @@ cargo test --manifest-path src-tauri/Cargo.toml service::state
 cargo test --manifest-path src-tauri/Cargo.toml settings
 cargo test --manifest-path src-tauri/Cargo.toml paths
 pnpm upstream:verify
+pnpm tauri info
+rg -n "greet|@tauri-apps/api|__TAURI_INTERNALS__|window\\.__TAURI__|invoke\\(" src src-tauri/resources/panel src-tauri/src src-tauri/capabilities
 git ls-files src-tauri/binaries src-tauri/resources/config.example.yaml src-tauri/resources/panel
 git check-ignore -v src-tauri/binaries/clirelay-aarch64-apple-darwin src-tauri/resources/config.example.yaml src-tauri/resources/panel/manage.html src-tauri/resources/panel/assets/panel-chunk.js
 ```
 
-Expected: `pnpm test` 通过 6 个用例；`cargo fmt --manifest-path src-tauri/Cargo.toml --check` 通过；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 31 个单元用例和 4 个 Service Manager 集成用例；`cargo test --manifest-path src-tauri/Cargo.toml --test service_manager` 通过 4 个用例；`service::health` 过滤器通过 6 个用例；`service::ownership` 过滤器通过 7 个用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
+Expected: `pnpm test` 通过 6 个用例；`pnpm build` 通过；`cargo fmt --manifest-path src-tauri/Cargo.toml --check` 通过；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 36 个单元用例和 4 个 Service Manager 集成用例；`commands` 过滤器通过 5 个用例；`cargo test --manifest-path src-tauri/Cargo.toml --test service_manager` 通过 4 个用例；`service::health` 过滤器通过 6 个用例；`service::ownership` 过滤器通过 7 个用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`pnpm tauri info` 可读取配置（本机未安装 Xcode 属环境提示，不影响当前代码验证）；Panel dist 无 `@tauri-apps/api`、`__TAURI_INTERNALS__` 或 `window.__TAURI__` 命中；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
 
 ---
 
@@ -218,7 +223,7 @@ CliRelay-Desktop/
 - [x] Task 8：实现进程归属、runtime-state 和残留接管
 - [x] Task 9：实现健康检查、Panel ready 判定和 External 探测
 - [x] Task 10：实现 Service Manager 启停重启流程
-- [ ] Task 11：实现 Rust command 白名单和 Settings patch 校验
+- [x] Task 11：实现 Rust command 白名单和 Settings patch 校验
 - [ ] Task 12：实现主窗口、Panel 窗口和 Settings 窗口管理
 - [ ] Task 13：实现 React Shell、Status、Settings 和前端 bridge
 - [ ] Task 14：实现菜单栏、Dock 恢复和退出行为
@@ -1175,11 +1180,15 @@ git commit -m "feat: manage sidecar lifecycle"
 - Create: `src-tauri/capabilities/settings.json`
 - Create: `src-tauri/capabilities/panel.json`
 - Modify: `src-tauri/src/lib.rs`
+- Modify: `src-tauri/src/service/manager.rs`
+- Modify: `src/App.tsx`
+- Modify: `src/App.css`
+- Delete: `src-tauri/capabilities/default.json`
 - Test: `src-tauri/src/commands.rs`
 
 **代码改动原因：** 前端不能传 PID、路径、URL 或任意配置字段。命令白名单和 Rust 端校验是 Panel 零权限与 Shell 最小权限的核心。
 
-- [ ] **Step 1: 暴露命令白名单**
+- [x] **Step 1: 暴露命令白名单**
 
 只注册：
 
@@ -1199,7 +1208,7 @@ update_desktop_settings
 check_for_updates
 ```
 
-- [ ] **Step 2: 固定无参数路径命令**
+- [x] **Step 2: 固定无参数路径命令**
 
 ```text
 open_data_directory() 不接受路径参数。
@@ -1215,7 +1224,7 @@ http://127.0.0.1:{port}
 http://127.0.0.1:{port}/v1
 ```
 
-- [ ] **Step 3: 实现 Settings patch 白名单**
+- [x] **Step 3: 实现 Settings patch 白名单**
 
 只允许：
 
@@ -1244,7 +1253,7 @@ runtime_state
 端口范围必须是 1024-65535。
 ```
 
-- [ ] **Step 4: 配置 capabilities**
+- [x] **Step 4: 配置 capabilities**
 
 要求：
 
@@ -1261,7 +1270,7 @@ Panel 验收方式：
 在 Panel DevTools 控制台执行 window.__TAURI_INTERNALS__，应不可用或无法调用 Desktop commands。
 ```
 
-- [ ] **Step 5: 添加测试**
+- [x] **Step 5: 添加测试**
 
 Run:
 
@@ -1278,10 +1287,10 @@ Expected:
 4. copy_endpoint 使用当前状态端口生成 URL。
 ```
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
-git add src-tauri/src/commands.rs src-tauri/capabilities src-tauri/src/lib.rs
+git add src-tauri/src/commands.rs src-tauri/capabilities src-tauri/src/lib.rs src-tauri/src/service/manager.rs src/App.tsx src/App.css
 git commit -m "feat: add safe desktop commands"
 ```
 
