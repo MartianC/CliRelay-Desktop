@@ -30,8 +30,9 @@
 | Task 9 | `38db95c feat: add service health probes` | 已完成 |
 | Task 10 | `0973de0 feat: manage sidecar lifecycle` | 已完成 |
 | Task 11 | `0624486 feat: add safe desktop commands` | 已完成 |
+| Task 11 修正 | `e5be6ed fix: load existing camelcase settings` | 已完成 |
 
-**当前结论：** Task 1 到 Task 11 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏、CliRelay 原始输出采集、runtime-state、Sidecar 归属判断、健康检查、Panel ready、External 端口探测、Service Manager 启停重启流程、Rust command 白名单、Settings patch 校验和窗口 capability 初始隔离已经具备测试覆盖。
+**当前结论：** Task 1 到 Task 11 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏、CliRelay 原始输出采集、runtime-state、Sidecar 归属判断、健康检查、Panel ready、External 端口探测、Service Manager 启停重启流程、Rust command 白名单、Settings patch 校验、既有 camelCase settings 兼容和窗口 capability 初始隔离已经具备测试覆盖。
 
 **下一步：** 从 Task 12 开始实现主窗口、Panel 窗口和 Settings 窗口管理。完整 React Shell、菜单栏和发布 CI 仍在后续 Task 中完成。
 
@@ -57,7 +58,7 @@ git ls-files src-tauri/binaries src-tauri/resources/config.example.yaml src-taur
 git check-ignore -v src-tauri/binaries/clirelay-aarch64-apple-darwin src-tauri/resources/config.example.yaml src-tauri/resources/panel/manage.html src-tauri/resources/panel/assets/panel-chunk.js
 ```
 
-Expected: `pnpm test` 通过 6 个用例；`pnpm build` 通过；`cargo fmt --manifest-path src-tauri/Cargo.toml --check` 通过；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 36 个单元用例和 4 个 Service Manager 集成用例；`commands` 过滤器通过 5 个用例；`cargo test --manifest-path src-tauri/Cargo.toml --test service_manager` 通过 4 个用例；`service::health` 过滤器通过 6 个用例；`service::ownership` 过滤器通过 7 个用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`pnpm tauri info` 可读取配置（本机未安装 Xcode 属环境提示，不影响当前代码验证）；Panel dist 无 `@tauri-apps/api`、`__TAURI_INTERNALS__` 或 `window.__TAURI__` 命中；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
+Expected: `pnpm test` 通过 6 个用例；`pnpm build` 通过；`cargo fmt --manifest-path src-tauri/Cargo.toml --check` 通过；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 37 个单元用例和 4 个 Service Manager 集成用例；`commands` 过滤器通过 5 个用例；`cargo test --manifest-path src-tauri/Cargo.toml --test service_manager` 通过 4 个用例；`service::health` 过滤器通过 6 个用例；`service::ownership` 过滤器通过 7 个用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过既有设置兼容回归用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`pnpm tauri info` 可读取配置（本机未安装 Xcode 属环境提示，不影响当前代码验证）；Panel dist 无 `@tauri-apps/api`、`__TAURI_INTERNALS__` 或 `window.__TAURI__` 命中；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
 
 ---
 
