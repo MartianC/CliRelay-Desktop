@@ -40,7 +40,7 @@ const snapshot: ServiceSnapshot = {
 };
 
 describe("SettingsView", () => {
-  test("显示四个设置区块并在 Running 时禁用端口输入", () => {
+  test("使用两栏导航并默认显示 General 页面", () => {
     const html = renderToStaticMarkup(
       <SettingsView
         settings={settings}
@@ -58,11 +58,40 @@ describe("SettingsView", () => {
       />,
     );
 
+    expect(html).toContain("settings-layout");
+    expect(html).toContain("settings-sidebar");
+    expect(html).toContain('aria-current="page"');
+    expect(html).toContain('style="--settings-accent:#1d4ed8"');
     expect(html).toContain("General");
     expect(html).toContain("Service");
     expect(html).toContain("Update");
     expect(html).toContain("About");
+    expect(html).toContain("登录时启动 Desktop");
+    expect(html).not.toContain("数据目录");
+  });
+
+  test("Service 页面保留运行态端口禁用提示", () => {
+    const html = renderToStaticMarkup(
+      <SettingsView
+        settings={settings}
+        draft={draft}
+        serviceSnapshot={snapshot}
+        updateResult={null}
+        error={null}
+        isBusy={false}
+        initialSection="service"
+        onLoad={vi.fn()}
+        onDraftChange={vi.fn()}
+        onSave={vi.fn()}
+        onCheckUpdates={vi.fn()}
+        onOpenDataDirectory={vi.fn()}
+        onOpenLogDirectory={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("Service");
+    expect(html).toContain("数据目录");
     expect(html).toContain("disabled");
-    expect(html).toContain("非官方桌面伴侣");
+    expect(html).not.toContain("登录时启动 Desktop");
   });
 });
