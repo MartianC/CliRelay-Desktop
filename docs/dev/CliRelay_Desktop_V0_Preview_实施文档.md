@@ -25,16 +25,18 @@
 | Task 4 修正 | `c2cad66 chore: ignore fetched upstream assets` | 已完成 |
 | Task 5 | `c71d25f feat: add desktop paths and settings` | 已完成 |
 | Task 6 | `d4eae19 feat: add service state machine` | 已完成 |
+| Task 7 | `c1bc7a0 feat: add rotating logs` | 已完成 |
 
-**当前结论：** Task 1 到 Task 6 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制和服务状态机已经具备单元测试覆盖。
+**当前结论：** Task 1 到 Task 7 已完成。上游 CliRelay binary、`config.example.yaml` 和 codeProxy panel dist 不进入 git；它们由 `pnpm upstream:fetch` 按 `upstream-lock.json` 下载、校验和放置，并由 `.gitignore` 忽略。Desktop 路径、默认设置、`runtime/config.yaml` 首次生成、本地 panel 复制、服务状态机、日志轮转、Desktop 日志脱敏和 CliRelay 原始输出采集已经具备单元测试覆盖。
 
-**下一步：** 从 Task 7 开始实现日志轮转、日志脱敏和 Sidecar stdout/stderr 采集。运行时 Sidecar 启动、External/Owned 判定、健康检查、退出清理和 UI 接入仍在后续 Task 中完成。
+**下一步：** 从 Task 8 开始实现进程归属、runtime-state 和残留接管。运行时 Sidecar 启动、External/Owned 判定、健康检查、退出清理和 UI 接入仍在后续 Task 中完成。
 
 **最近验证：**
 
 ```bash
 pnpm test
 cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml service::logs
 cargo test --manifest-path src-tauri/Cargo.toml service::state
 cargo test --manifest-path src-tauri/Cargo.toml settings
 cargo test --manifest-path src-tauri/Cargo.toml paths
@@ -43,7 +45,7 @@ git ls-files src-tauri/binaries src-tauri/resources/config.example.yaml src-taur
 git check-ignore -v src-tauri/binaries/clirelay-aarch64-apple-darwin src-tauri/resources/config.example.yaml src-tauri/resources/panel/manage.html src-tauri/resources/panel/assets/panel-chunk.js
 ```
 
-Expected: `pnpm test` 通过 6 个用例；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 11 个 Rust 用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
+Expected: `pnpm test` 通过 6 个用例；`cargo test --manifest-path src-tauri/Cargo.toml` 通过 18 个 Rust 用例；`service::logs` 过滤器通过 7 个用例；`service::state` 过滤器通过 2 个用例；`settings` 过滤器通过 7 个用例；`paths` 过滤器通过 2 个用例；`pnpm upstream:verify` 通过；`git ls-files ...` 无输出；`git check-ignore -v ...` 命中 `.gitignore` 中的上游 fetch 输出规则。
 
 ---
 
@@ -205,7 +207,7 @@ CliRelay-Desktop/
 - [x] Task 4：实现上游资产下载、校验和放置脚本
 - [x] Task 5：实现路径、设置和默认配置生成
 - [x] Task 6：实现服务状态机和表驱动测试
-- [ ] Task 7：实现日志轮转、日志脱敏和 Sidecar stdout/stderr 采集
+- [x] Task 7：实现日志轮转、日志脱敏和 Sidecar stdout/stderr 采集
 - [ ] Task 8：实现进程归属、runtime-state 和残留接管
 - [ ] Task 9：实现健康检查、Panel ready 判定和 External 探测
 - [ ] Task 10：实现 Service Manager 启停重启流程
@@ -838,7 +840,7 @@ Expected: 状态机测试通过。
 
 **代码改动原因：** V0 必须分离 Desktop 日志和 CliRelay 原始 stdout/stderr，并避免 Desktop 日志写入 API key、token、cookie 或 authorization header。
 
-- [ ] **Step 1: 实现轮转策略**
+- [x] **Step 1: 实现轮转策略**
 
 `logs.rs` 常量：
 
@@ -859,7 +861,7 @@ desktop.log -> desktop.log.1
 
 `clirelay.log` 使用同样策略。
 
-- [ ] **Step 2: 实现脱敏函数**
+- [x] **Step 2: 实现脱敏函数**
 
 ```rust
 pub fn redact_log_line(input: &str) -> String
@@ -876,7 +878,7 @@ cookie: abc -> cookie: [REDACTED]
 oauth_token=abc -> oauth_token=[REDACTED]
 ```
 
-- [ ] **Step 3: 添加测试**
+- [x] **Step 3: 添加测试**
 
 Run:
 
@@ -894,7 +896,7 @@ Expected:
 5. CliRelay 原始 stdout/stderr 不在 UI 中读取。
 ```
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src-tauri/src/service/logs.rs src-tauri/src/service/mod.rs
