@@ -122,13 +122,13 @@ pub fn tray_menu_items(status: ServiceStatus) -> Vec<TrayMenuItemSpec> {
     let mut items = vec![
         TrayMenuItemSpec::disabled(TrayMenuItemId::StatusTitle, status_title(&status)),
         TrayMenuItemSpec::enabled(TrayMenuItemId::OpenPanel, LABEL_OPEN_PANEL),
-        TrayMenuItemSpec::enabled(TrayMenuItemId::Settings, LABEL_SETTINGS),
     ];
 
     items.extend(service_action_items(&status));
     items.extend([
-        TrayMenuItemSpec::enabled(TrayMenuItemId::OpenDataDirectory, LABEL_OPEN_DATA_DIR),
-        TrayMenuItemSpec::enabled(TrayMenuItemId::OpenLogDirectory, LABEL_OPEN_LOG_DIR),
+        //TrayMenuItemSpec::enabled(TrayMenuItemId::OpenDataDirectory, LABEL_OPEN_DATA_DIR),
+        //TrayMenuItemSpec::enabled(TrayMenuItemId::OpenLogDirectory, LABEL_OPEN_LOG_DIR),
+        TrayMenuItemSpec::enabled(TrayMenuItemId::Settings, LABEL_SETTINGS),
         TrayMenuItemSpec::enabled(TrayMenuItemId::Quit, LABEL_QUIT),
     ]);
 
