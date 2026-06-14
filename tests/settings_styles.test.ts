@@ -5,7 +5,9 @@ import { describe, expect, test } from "vitest";
 const appCss = readFileSync(fileURLToPath(new URL("../src/styles/app.css", import.meta.url)), "utf8");
 
 function cssBlock(selector: string) {
-  const start = appCss.lastIndexOf(`${selector} {`);
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = Array.from(appCss.matchAll(new RegExp(`(^|\\n)${escapedSelector} \\{`, "g")));
+  const start = matches.at(-1)?.index ?? -1;
 
   if (start === -1) {
     return "";
@@ -41,5 +43,16 @@ describe("Settings 样式", () => {
     expect(smallWindowMedia).not.toContain(".settings-header");
     expect(smallWindowMedia).not.toContain(".settings-layout");
     expect(smallWindowMedia).not.toContain(".settings-sidebar");
+  });
+
+  test("Settings 开关使用自定义轨道而不是原生 checkbox 外观", () => {
+    const toggleInput = cssBlock(".toggle-input");
+    const toggleControl = cssBlock(".toggle-control");
+
+    expect(toggleInput).toContain("opacity: 0");
+    expect(toggleInput).toContain("position: absolute");
+    expect(toggleControl).toContain("border-radius: 999px");
+    expect(toggleControl).toContain("width: 38px");
+    expect(appCss).toContain(".toggle-input:checked + .toggle-control");
   });
 });

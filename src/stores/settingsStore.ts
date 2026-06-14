@@ -40,7 +40,6 @@ export interface SettingsStore {
   subscribe(listener: () => void): () => void;
   load(): Promise<void>;
   setDraft(patch: Partial<SettingsDraft>): void;
-  save(): Promise<void>;
   checkUpdates(): Promise<void>;
 }
 
@@ -118,11 +117,63 @@ export function toSettingsPatch(
 export function createSettingsStore(commands: SettingsCommands): SettingsStore {
   let state = defaultState;
   const listeners = new Set<() => void>();
+  let busyCount = 0;
+  let draftVersion = 0;
+  let appliedSaveVersion = 0;
 
   function emit(next: Partial<SettingsStoreState>) {
     state = { ...state, ...next };
     for (const listener of listeners) {
       listener();
+    }
+  }
+
+  function beginBusy() {
+    busyCount += 1;
+    emit({ isBusy: true, error: null });
+  }
+
+  function endBusy(next: Partial<SettingsStoreState> = {}) {
+    busyCount = Math.max(0, busyCount - 1);
+    emit({ ...next, isBusy: busyCount > 0 });
+  }
+
+  async function persistDraft(draft: SettingsDraft, version: number) {
+    if (!state.settings) {
+      return;
+    }
+
+    let patch: DesktopSettingsPatch;
+    try {
+      patch = toSettingsPatch(state.settings, draft);
+    } catch {
+      return;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
+
+    beginBusy();
+    try {
+      const updated = await commands.updateDesktopSettings(patch);
+      if (version < appliedSaveVersion) {
+        endBusy();
+        return;
+      }
+
+      appliedSaveVersion = version;
+      endBusy({
+        settings: updated,
+        draft: version === draftVersion ? createPortDraft(updated) : state.draft,
+      });
+    } catch (caught) {
+      if (version < appliedSaveVersion) {
+        endBusy();
+        return;
+      }
+
+      endBusy({ error: toErrorMessage(caught) });
     }
   }
 
@@ -133,52 +184,38 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
       return () => listeners.delete(listener);
     },
     async load() {
-      emit({ isBusy: true, error: null });
+      beginBusy();
       try {
         const settings = await commands.getDesktopSettings();
-        emit({
+        draftVersion += 1;
+        appliedSaveVersion = draftVersion;
+        endBusy({
           settings,
           draft: createPortDraft(settings),
-          isBusy: false,
         });
       } catch (caught) {
-        emit({ error: toErrorMessage(caught), isBusy: false });
+        endBusy({ error: toErrorMessage(caught) });
       }
     },
     setDraft(patch) {
       if (!state.draft) {
         return;
       }
-      emit({ draft: { ...state.draft, ...patch } });
-    },
-    async save() {
-      if (!state.settings || !state.draft) {
-        return;
-      }
 
-      emit({ isBusy: true, error: null });
-      try {
-        const updated = await commands.updateDesktopSettings(
-          toSettingsPatch(state.settings, state.draft),
-        );
-        emit({
-          settings: updated,
-          draft: createPortDraft(updated),
-          isBusy: false,
-        });
-      } catch (caught) {
-        emit({ error: toErrorMessage(caught), isBusy: false });
-      }
+      const draft = { ...state.draft, ...patch };
+      draftVersion += 1;
+      const version = draftVersion;
+      emit({ draft });
+      void persistDraft(draft, version);
     },
     async checkUpdates() {
-      emit({ isBusy: true, error: null });
+      beginBusy();
       try {
-        emit({
+        endBusy({
           updateResult: await commands.checkForUpdates(),
-          isBusy: false,
         });
       } catch (caught) {
-        emit({ error: toErrorMessage(caught), isBusy: false });
+        endBusy({ error: toErrorMessage(caught) });
       }
     },
   };

@@ -18,7 +18,6 @@ interface SettingsViewProps {
   isBusy: boolean;
   onLoad?: () => void | Promise<void>;
   onDraftChange: (patch: Partial<SettingsDraft>) => void;
-  onSave: () => void | Promise<void>;
   onCheckUpdates: () => void | Promise<void>;
   onOpenDataDirectory: () => void | Promise<void>;
   onOpenLogDirectory: () => void | Promise<void>;
@@ -46,7 +45,6 @@ export function SettingsView(props: SettingsViewProps) {
     error,
     isBusy,
     onDraftChange,
-    onSave,
     onCheckUpdates,
     onOpenDataDirectory,
     onOpenLogDirectory,
@@ -56,7 +54,6 @@ export function SettingsView(props: SettingsViewProps) {
   const status = serviceSnapshot?.status ?? "Stopped";
   const canEditPort = canEditServicePort(status);
   const portValidation = draft ? validateServicePort(draft.portText) : null;
-  const canSave = Boolean(draft && portValidation?.ok && !isBusy);
   const activeLabel = settingsSections.find((section) => section.id === activeSection)?.label ?? "General";
 
   return (
@@ -96,9 +93,6 @@ export function SettingsView(props: SettingsViewProps) {
                 <p className="eyebrow">{activeLabel}</p>
                 <h2 id="settings-section-title">{activeLabel}</h2>
               </div>
-              <button type="button" onClick={() => void onSave()} disabled={!canSave}>
-                保存
-              </button>
             </header>
 
             {activeSection === "general" ? (
@@ -176,7 +170,12 @@ export function SettingsView(props: SettingsViewProps) {
                   />
                 </SettingsPanel>
                 <div className="settings-actions">
-                  <button type="button" className="secondary" onClick={() => void onCheckUpdates()}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={isBusy}
+                    onClick={() => void onCheckUpdates()}
+                  >
                     手动检查
                   </button>
                   <a
@@ -238,11 +237,13 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
         {description ? <small>{description}</small> : null}
       </span>
       <input
+        className="toggle-input"
         type="checkbox"
         role="switch"
         checked={checked}
         onChange={(event) => onChange(event.currentTarget.checked)}
       />
+      <span className="toggle-control" aria-hidden="true" />
     </label>
   );
 }

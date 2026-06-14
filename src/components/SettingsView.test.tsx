@@ -51,7 +51,6 @@ describe("SettingsView", () => {
         isBusy={false}
         onLoad={vi.fn()}
         onDraftChange={vi.fn()}
-        onSave={vi.fn()}
         onCheckUpdates={vi.fn()}
         onOpenDataDirectory={vi.fn()}
         onOpenLogDirectory={vi.fn()}
@@ -68,6 +67,8 @@ describe("SettingsView", () => {
     expect(html).toContain("Update");
     expect(html).toContain("About");
     expect(html).toContain("登录时启动 Desktop");
+    expect(html).toContain('class="toggle-control"');
+    expect(html).not.toContain("保存");
     expect(html).not.toContain("数据目录");
   });
 
@@ -83,7 +84,6 @@ describe("SettingsView", () => {
         initialSection="service"
         onLoad={vi.fn()}
         onDraftChange={vi.fn()}
-        onSave={vi.fn()}
         onCheckUpdates={vi.fn()}
         onOpenDataDirectory={vi.fn()}
         onOpenLogDirectory={vi.fn()}

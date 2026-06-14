@@ -101,7 +101,6 @@ function App() {
         error={settings.error}
         isBusy={settings.isBusy}
         onDraftChange={settingsStore.setDraft}
-        onSave={settingsStore.save}
         onCheckUpdates={settingsStore.checkUpdates}
         onOpenDataDirectory={openDataDirectory}
         onOpenLogDirectory={openLogDirectory}
