@@ -4,6 +4,7 @@ import {
   canEditServicePort,
   createPortDraft,
   createSettingsStore,
+  shouldAutoCheckUpdates,
   toSettingsPatch,
   validateServicePort,
 } from "./settingsStore";
@@ -57,6 +58,43 @@ describe("settings store helpers", () => {
     });
   });
 
+  test("自动检查开启后每天最多触发一次", () => {
+    const now = new Date("2026-06-15T12:00:00Z");
+
+    expect(
+      shouldAutoCheckUpdates(
+        { ...loadedSettings, autoCheckNewVersions: false, lastUpdateCheckAt: null },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      shouldAutoCheckUpdates(
+        { ...loadedSettings, autoCheckNewVersions: true, lastUpdateCheckAt: null },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      shouldAutoCheckUpdates(
+        {
+          ...loadedSettings,
+          autoCheckNewVersions: true,
+          lastUpdateCheckAt: "2026-06-15T00:00:00Z",
+        },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      shouldAutoCheckUpdates(
+        {
+          ...loadedSettings,
+          autoCheckNewVersions: true,
+          lastUpdateCheckAt: "2026-06-14T11:59:59Z",
+        },
+        now,
+      ),
+    ).toBe(true);
+  });
+
   test("draft 变更后立即保存有效设置", async () => {
     const updateDesktopSettings = vi.fn(async (patch) => ({
       ...loadedSettings,
@@ -66,6 +104,7 @@ describe("settings store helpers", () => {
       getDesktopSettings: vi.fn(async () => loadedSettings),
       updateDesktopSettings,
       checkForUpdates: vi.fn(),
+      installUpstreamComponentUpdates: vi.fn(),
     });
 
     await store.load();
@@ -87,6 +126,7 @@ describe("settings store helpers", () => {
       getDesktopSettings: vi.fn(async () => loadedSettings),
       updateDesktopSettings,
       checkForUpdates: vi.fn(),
+      installUpstreamComponentUpdates: vi.fn(),
     });
 
     await store.load();
@@ -110,6 +150,7 @@ describe("settings store helpers", () => {
       getDesktopSettings: vi.fn(async () => loadedSettings),
       updateDesktopSettings,
       checkForUpdates: vi.fn(),
+      installUpstreamComponentUpdates: vi.fn(),
     });
 
     await store.load();

@@ -615,6 +615,32 @@ h2 {
   margin: 0 15px 15px;
 }
 
+.component-update-summary {
+  border-top: 1px solid #edf2f7;
+  display: grid;
+  gap: 8px;
+  padding: 14px 15px;
+}
+
+.component-update-summary h4 {
+  color: #253145;
+  font-size: 0.86rem;
+  margin: 0;
+}
+
+.component-update-summary .field-list {
+  gap: 7px;
+}
+
+.update-notes {
+  border-top: 1px solid #edf2f7;
+  color: #475467;
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 13px 15px 15px 32px;
+}
+
 .settings-actions {
   align-items: center;
   background: #ffffff;

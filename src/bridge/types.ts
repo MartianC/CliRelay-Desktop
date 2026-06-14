@@ -43,11 +43,55 @@ export interface DesktopSettingsPatch {
   autoCheckNewVersions?: boolean;
 }
 
+export type UpdateSubject = "Desktop" | "CliRelay" | "codeProxy";
+export type DesktopUpdateAction = "OpenRelease" | "None";
+export type UpstreamUpdateAction = "Check" | "InstallInDesktop" | "None";
+export type UpdateStatus = "Unavailable" | "UpToDate" | "UpdateAvailable" | "Error";
+export type UpstreamInstallScope = "None" | "CliRelay" | "codeProxy" | "Both";
+
+export interface DesktopUpdateItem {
+  subject: "Desktop";
+  status: UpdateStatus;
+  currentVersion: string;
+  latestVersion: string | null;
+  message: string;
+  releaseUrl: string | null;
+  action: DesktopUpdateAction;
+  releaseNotesSummary: string[];
+}
+
+export interface ComponentUpdateItem {
+  subject: "CliRelay" | "codeProxy";
+  status: UpdateStatus;
+  currentVersion: string;
+  latestVersion: string | null;
+  message: string;
+  releaseUrl: string | null;
+  assetName: string | null;
+  assetSha256: string | null;
+}
+
+export interface UpstreamUpdateBlock {
+  status: UpdateStatus;
+  message: string;
+  clirelay: ComponentUpdateItem;
+  codeProxy: ComponentUpdateItem;
+  installScope: UpstreamInstallScope;
+  action: UpstreamUpdateAction;
+}
+
 export interface UpdateCheckResult {
-  status: "Unavailable" | "UpToDate" | "UpdateAvailable" | "Error";
+  status: UpdateStatus;
   message: string;
   checkedAt: string;
-  releaseUrl: string | null;
+  desktop: DesktopUpdateItem;
+  upstream: UpstreamUpdateBlock;
+}
+
+export interface ComponentInstallResult {
+  status: "Success" | "PartialSuccess" | "NoUpdates";
+  message: string;
+  installedScope: UpstreamInstallScope;
 }
 
 export interface CommandErrorPayload {

@@ -1,8 +1,20 @@
+use crate::component_update::{
+    current_component_versions, current_sidecar_sha256, install_clirelay_update,
+    install_codeproxy_update, runtime_sidecar_if_valid, ComponentInstallResult,
+    ComponentUpdateError, InstallStatus,
+};
+use crate::service::logs::append_desktop_log_line;
 use crate::service::manager::{
     ManagerError, ServiceManager, ServiceManagerConfig, ServiceSnapshot,
 };
+use crate::service::ownership::ProcessOwnership;
 use crate::service::state::ServiceStatus;
 use crate::settings::{load_or_create_settings, save_settings, DesktopSettings, SettingsError};
+use crate::update_check::{
+    build_update_check_result, fetch_github_releases, fetch_latest_preview,
+    select_component_release, ComponentUpdateCandidate, CurrentVersions, UpdateCheckResult,
+    UpstreamComponent, UpstreamInstallScope,
+};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -12,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Manager;
 
-pub const SAFE_COMMAND_NAMES: [&str; 13] = [
+pub const SAFE_COMMAND_NAMES: [&str; 14] = [
     "get_service_snapshot",
     "start_service",
     "stop_service",
@@ -26,6 +38,7 @@ pub const SAFE_COMMAND_NAMES: [&str; 13] = [
     "get_desktop_settings",
     "update_desktop_settings",
     "check_for_updates",
+    "install_upstream_component_updates",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -41,6 +54,8 @@ pub enum CommandError {
     Io(String),
     Settings(String),
     Manager(String),
+    Update(String),
+    ComponentUpdate(String),
     Path(String),
     Window(String),
     Open(String),
@@ -61,6 +76,8 @@ impl fmt::Display for CommandError {
             Self::Io(message) => write!(formatter, "{message}"),
             Self::Settings(message) => write!(formatter, "{message}"),
             Self::Manager(message) => write!(formatter, "{message}"),
+            Self::Update(message) => write!(formatter, "{message}"),
+            Self::ComponentUpdate(message) => write!(formatter, "{message}"),
             Self::Path(message) => write!(formatter, "{message}"),
             Self::Window(message) => write!(formatter, "{message}"),
             Self::Open(message) => write!(formatter, "{message}"),
@@ -88,6 +105,18 @@ impl From<ManagerError> for CommandError {
     }
 }
 
+impl From<crate::update_check::UpdateCheckError> for CommandError {
+    fn from(error: crate::update_check::UpdateCheckError) -> Self {
+        Self::Update(error.to_string())
+    }
+}
+
+impl From<ComponentUpdateError> for CommandError {
+    fn from(error: ComponentUpdateError) -> Self {
+        Self::ComponentUpdate(error.to_string())
+    }
+}
+
 impl From<tauri::Error> for CommandError {
     fn from(error: tauri::Error) -> Self {
         Self::Window(error.to_string())
@@ -100,6 +129,7 @@ pub struct DesktopCommandState {
     paths: crate::paths::DesktopPaths,
     settings: DesktopSettings,
     manager: ServiceManager,
+    bundled_sidecar_executable: PathBuf,
 }
 
 impl DesktopCommandState {
@@ -107,11 +137,13 @@ impl DesktopCommandState {
         paths: crate::paths::DesktopPaths,
         settings: DesktopSettings,
         manager: ServiceManager,
+        bundled_sidecar_executable: PathBuf,
     ) -> Self {
         Self {
             paths,
             settings,
             manager,
+            bundled_sidecar_executable,
         }
     }
 
@@ -123,16 +155,29 @@ impl DesktopCommandState {
         let paths = crate::paths::DesktopPaths::from_home_dir(home_dir);
         let settings = load_or_create_settings(&paths)?;
         let resources = ResourcePaths::resolve(app)?;
+        let sidecar_executable = runtime_sidecar_if_valid(&paths)
+            .unwrap_or_else(|| resources.sidecar_executable.clone());
+        let (clirelay_version, code_proxy_version) = current_component_versions(&paths);
+        let sidecar_sha256 = current_sidecar_sha256(&paths);
         let manager_config = ServiceManagerConfig::new(
             paths.clone(),
             settings.clone(),
             resources.config_example,
             resources.panel_dir,
-            resources.sidecar_executable,
+            sidecar_executable,
         );
+        let mut manager_config = manager_config;
+        manager_config.clirelay_version = clirelay_version;
+        manager_config.code_proxy_version = code_proxy_version;
+        manager_config.sidecar_sha256 = sidecar_sha256;
         let manager = ServiceManager::new(manager_config);
 
-        Ok(Self::new(paths, settings, manager))
+        Ok(Self::new(
+            paths,
+            settings,
+            manager,
+            resources.sidecar_executable,
+        ))
     }
 
     pub fn paths(&self) -> &crate::paths::DesktopPaths {
@@ -153,6 +198,28 @@ impl DesktopCommandState {
 
     pub fn restart_service(&mut self) -> Result<ServiceSnapshot, ManagerError> {
         self.manager.restart_service()
+    }
+
+    pub fn current_versions(&self) -> CurrentVersions {
+        let (clirelay, code_proxy) = current_component_versions(&self.paths);
+        CurrentVersions {
+            desktop: env!("CARGO_PKG_VERSION").to_string(),
+            clirelay,
+            code_proxy,
+        }
+    }
+
+    pub fn refresh_runtime_components(&mut self) {
+        let sidecar_executable = runtime_sidecar_if_valid(&self.paths)
+            .unwrap_or_else(|| self.bundled_sidecar_executable.clone());
+        let (clirelay_version, code_proxy_version) = current_component_versions(&self.paths);
+        let sidecar_sha256 = current_sidecar_sha256(&self.paths);
+        self.manager.refresh_runtime_components(
+            sidecar_executable,
+            clirelay_version,
+            code_proxy_version,
+            sidecar_sha256,
+        );
     }
 }
 
@@ -403,8 +470,158 @@ pub fn update_desktop_settings(
 }
 
 #[tauri::command]
-pub fn check_for_updates() -> Result<(), CommandError> {
-    Err(CommandError::NotInitialized)
+pub fn check_for_updates(
+    state: tauri::State<'_, SharedDesktopCommandState>,
+) -> Result<UpdateCheckResult, CommandError> {
+    let current = {
+        let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+        state.current_versions()
+    };
+    let paths = {
+        let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+        state.paths.clone()
+    };
+
+    let latest_preview = match fetch_latest_preview() {
+        Ok(preview) => Some(preview),
+        Err(error) => {
+            let _ = append_desktop_log_line(&paths, &format!("Desktop 更新检查失败: {error}"));
+            None
+        }
+    };
+    let clirelay_candidate = match fetch_component_candidate(UpstreamComponent::CliRelay) {
+        Ok(candidate) => candidate,
+        Err(error) => {
+            let _ = append_desktop_log_line(&paths, &format!("CliRelay 更新检查失败: {error}"));
+            None
+        }
+    };
+    let codeproxy_candidate = match fetch_component_candidate(UpstreamComponent::CodeProxy) {
+        Ok(candidate) => candidate,
+        Err(error) => {
+            let _ = append_desktop_log_line(&paths, &format!("codeProxy 更新检查失败: {error}"));
+            None
+        }
+    };
+    let checked_at = chrono::Utc::now();
+    let result = build_update_check_result(
+        current,
+        latest_preview,
+        clirelay_candidate,
+        codeproxy_candidate,
+        checked_at,
+    );
+
+    {
+        let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+        state.settings.last_update_check_at = Some(checked_at);
+        save_settings(&state.paths, &state.settings)?;
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn install_upstream_component_updates(
+    state: tauri::State<'_, SharedDesktopCommandState>,
+    install_scope: UpstreamInstallScope,
+    restart_after_install: bool,
+) -> Result<ComponentInstallResult, CommandError> {
+    if install_scope == UpstreamInstallScope::None {
+        return Ok(ComponentInstallResult {
+            status: InstallStatus::NoUpdates,
+            message: "没有可安装的上游组件更新".to_string(),
+            installed_scope: UpstreamInstallScope::None,
+        });
+    }
+
+    let clirelay_candidate = if matches!(
+        install_scope,
+        UpstreamInstallScope::CliRelay | UpstreamInstallScope::Both
+    ) {
+        fetch_component_candidate(UpstreamComponent::CliRelay)?
+    } else {
+        None
+    };
+    let codeproxy_candidate = if matches!(
+        install_scope,
+        UpstreamInstallScope::CodeProxy | UpstreamInstallScope::Both
+    ) {
+        fetch_component_candidate(UpstreamComponent::CodeProxy)?
+    } else {
+        None
+    };
+
+    let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+    let mut installed_clirelay = false;
+    let mut installed_codeproxy = false;
+    let mut stopped_for_install = false;
+
+    if let Some(candidate) = clirelay_candidate.as_ref() {
+        let status = state.manager.status();
+        match status {
+            ServiceStatus::Running | ServiceStatus::Unhealthy => {
+                if state.manager.ownership() != ProcessOwnership::Owned {
+                    return Err(CommandError::ComponentUpdate(
+                        "只允许更新 Desktop 自管 CliRelay 服务".to_string(),
+                    ));
+                }
+                if !restart_after_install {
+                    return Err(CommandError::ComponentUpdate(
+                        "更新运行中的 CliRelay 需要确认停止并重启服务".to_string(),
+                    ));
+                }
+                state.manager.stop_service()?;
+                stopped_for_install = true;
+            }
+            ServiceStatus::External | ServiceStatus::Starting | ServiceStatus::Stopping => {
+                return Err(ComponentUpdateError::InvalidServiceStatus(status).into());
+            }
+            ServiceStatus::Stopped | ServiceStatus::Error => {}
+        }
+
+        install_clirelay_update(&state.paths, candidate, state.manager.status())?;
+        installed_clirelay = true;
+        state.refresh_runtime_components();
+    }
+
+    if let Some(candidate) = codeproxy_candidate.as_ref() {
+        install_codeproxy_update(&state.paths, candidate)?;
+        installed_codeproxy = true;
+        state.refresh_runtime_components();
+    }
+
+    if stopped_for_install && restart_after_install {
+        state.manager.start_service()?;
+    }
+
+    let installed_scope = match (installed_clirelay, installed_codeproxy) {
+        (true, true) => UpstreamInstallScope::Both,
+        (true, false) => UpstreamInstallScope::CliRelay,
+        (false, true) => UpstreamInstallScope::CodeProxy,
+        (false, false) => UpstreamInstallScope::None,
+    };
+
+    Ok(ComponentInstallResult {
+        status: if installed_scope == install_scope {
+            InstallStatus::Success
+        } else {
+            InstallStatus::PartialSuccess
+        },
+        message: "已更新上游组件".to_string(),
+        installed_scope,
+    })
+}
+
+fn fetch_component_candidate(
+    component: UpstreamComponent,
+) -> Result<Option<ComponentUpdateCandidate>, CommandError> {
+    let api_url = match component {
+        UpstreamComponent::CliRelay => crate::update_check::CLIRELAY_RELEASES_API,
+        UpstreamComponent::CodeProxy => crate::update_check::CODEPROXY_RELEASES_API,
+    };
+    let releases = fetch_github_releases(api_url)?;
+    Ok(select_component_release(&releases, component)?)
 }
 
 fn open_path(path: &Path) -> Result<(), CommandError> {
@@ -464,6 +681,7 @@ mod tests {
                 "get_desktop_settings",
                 "update_desktop_settings",
                 "check_for_updates",
+                "install_upstream_component_updates",
             ]
         );
         assert!(!SAFE_COMMAND_NAMES.contains(&"greet"));
@@ -526,6 +744,7 @@ mod tests {
             last_error: None,
             ownership: ProcessOwnership::Unknown,
             clirelay_version: "test".to_string(),
+            code_proxy_version: "test".to_string(),
             sidecar_sha256: "test".to_string(),
         }
     }

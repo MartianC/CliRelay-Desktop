@@ -34,6 +34,7 @@ pub struct ServiceSnapshot {
     pub last_error: Option<String>,
     pub ownership: ProcessOwnership,
     pub clirelay_version: String,
+    pub code_proxy_version: String,
     pub sidecar_sha256: String,
 }
 
@@ -47,6 +48,7 @@ pub struct ServiceManagerConfig {
     pub host: String,
     pub desktop_version: String,
     pub clirelay_version: String,
+    pub code_proxy_version: String,
     pub sidecar_sha256: String,
     pub timeouts: ManagerTimeouts,
     pub sidecar_env: Vec<(String, String)>,
@@ -69,6 +71,7 @@ impl ServiceManagerConfig {
             host: "127.0.0.1".to_string(),
             desktop_version: env!("CARGO_PKG_VERSION").to_string(),
             clirelay_version: "unknown".to_string(),
+            code_proxy_version: "unknown".to_string(),
             sidecar_sha256: "unknown".to_string(),
             timeouts: ManagerTimeouts::default(),
             sidecar_env: Vec::new(),
@@ -195,12 +198,34 @@ impl ServiceManager {
             last_error: self.last_error.clone(),
             ownership: self.ownership.clone(),
             clirelay_version: self.config.clirelay_version.clone(),
+            code_proxy_version: self.config.code_proxy_version.clone(),
             sidecar_sha256: self.config.sidecar_sha256.clone(),
         }
     }
 
     pub fn update_settings(&mut self, settings: DesktopSettings) {
         self.config.settings = settings;
+    }
+
+    pub fn status(&self) -> ServiceStatus {
+        self.status.clone()
+    }
+
+    pub fn ownership(&self) -> ProcessOwnership {
+        self.ownership.clone()
+    }
+
+    pub fn refresh_runtime_components(
+        &mut self,
+        sidecar_executable: PathBuf,
+        clirelay_version: String,
+        code_proxy_version: String,
+        sidecar_sha256: String,
+    ) {
+        self.config.sidecar_executable = sidecar_executable;
+        self.config.clirelay_version = clirelay_version;
+        self.config.code_proxy_version = code_proxy_version;
+        self.config.sidecar_sha256 = sidecar_sha256;
     }
 
     pub fn start_service(&mut self) -> Result<ServiceSnapshot, ManagerError> {

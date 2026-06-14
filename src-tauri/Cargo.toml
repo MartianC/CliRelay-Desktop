@@ -18,6 +18,14 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-chrono = { version = "0.4", default-features = false, features = ["serde", "std"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 libc = "0.2"
 uuid = { version = "1", features = ["serde", "v4"] }
+semver = "1"
+sha2 = "0.10"
+hex = "0.4"
+url = { version = "2", features = ["serde"] }
+ureq = { version = "2", features = ["json"] }
+tar = "0.4"
+flate2 = "1"
+zip = "2"

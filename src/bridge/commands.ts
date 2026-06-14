@@ -1,12 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  ComponentInstallResult,
+  ComponentUpdateItem,
+  DesktopUpdateItem,
   DesktopSettings,
   DesktopSettingsPatch,
   ProcessOwnership,
   ServiceSnapshot,
   ServiceStatus,
+  UpstreamInstallScope,
+  UpstreamUpdateBlock,
   UpdateCheckResult,
+  UpdateStatus,
 } from "./types";
 
 interface RawServiceSnapshot {
@@ -35,11 +41,49 @@ interface RawDesktopSettings {
   last_update_check_at: string | null;
 }
 
+interface RawDesktopUpdateItem {
+  subject: "Desktop";
+  status: UpdateStatus;
+  current_version: string;
+  latest_version: string | null;
+  message: string;
+  release_url: string | null;
+  action: DesktopUpdateItem["action"];
+  release_notes_summary?: string[];
+}
+
+interface RawComponentUpdateItem {
+  subject: "CliRelay" | "codeProxy";
+  status: UpdateStatus;
+  current_version: string;
+  latest_version: string | null;
+  message: string;
+  release_url: string | null;
+  asset_name: string | null;
+  asset_sha256: string | null;
+}
+
+interface RawUpstreamUpdateBlock {
+  status: UpdateStatus;
+  message: string;
+  clirelay: RawComponentUpdateItem;
+  code_proxy: RawComponentUpdateItem;
+  install_scope: UpstreamInstallScope;
+  action: UpstreamUpdateBlock["action"];
+}
+
 interface RawUpdateCheckResult {
-  status?: UpdateCheckResult["status"];
-  message?: string;
-  checked_at?: string;
-  release_url?: string | null;
+  status: UpdateStatus;
+  message: string;
+  checked_at: string;
+  desktop: RawDesktopUpdateItem;
+  upstream: RawUpstreamUpdateBlock;
+}
+
+interface RawComponentInstallResult {
+  status: ComponentInstallResult["status"];
+  message: string;
+  installed_scope: UpstreamInstallScope;
 }
 
 export async function getServiceSnapshot(): Promise<ServiceSnapshot> {
@@ -99,14 +143,19 @@ export async function updateDesktopSettings(
 }
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
-  const result = await invoke<RawUpdateCheckResult | null>("check_for_updates");
+  return toUpdateCheckResult(await invoke<RawUpdateCheckResult>("check_for_updates"));
+}
 
-  return {
-    status: result?.status ?? "Unavailable",
-    message: result?.message ?? "Preview 更新检查尚未接入",
-    checkedAt: result?.checked_at ?? new Date().toISOString(),
-    releaseUrl: result?.release_url ?? null,
-  };
+export async function installUpstreamComponentUpdates(
+  installScope: UpstreamInstallScope,
+  restartAfterInstall: boolean,
+): Promise<ComponentInstallResult> {
+  return toComponentInstallResult(
+    await invoke<RawComponentInstallResult>("install_upstream_component_updates", {
+      installScope,
+      restartAfterInstall,
+    }),
+  );
 }
 
 function toServiceSnapshot(raw: RawServiceSnapshot): ServiceSnapshot {
@@ -123,6 +172,63 @@ function toServiceSnapshot(raw: RawServiceSnapshot): ServiceSnapshot {
     clirelayVersion: raw.clirelay_version,
     codeProxyVersion: raw.code_proxy_version ?? "unknown",
     sidecarSha256: raw.sidecar_sha256,
+  };
+}
+
+function toUpdateCheckResult(raw: RawUpdateCheckResult): UpdateCheckResult {
+  return {
+    status: raw.status,
+    message: raw.message,
+    checkedAt: raw.checked_at,
+    desktop: toDesktopUpdateItem(raw.desktop),
+    upstream: toUpstreamUpdateBlock(raw.upstream),
+  };
+}
+
+function toDesktopUpdateItem(raw: RawDesktopUpdateItem): DesktopUpdateItem {
+  return {
+    subject: raw.subject,
+    status: raw.status,
+    currentVersion: raw.current_version,
+    latestVersion: raw.latest_version,
+    message: raw.message,
+    releaseUrl: raw.release_url,
+    action: raw.action,
+    releaseNotesSummary: raw.release_notes_summary ?? [],
+  };
+}
+
+function toComponentUpdateItem(raw: RawComponentUpdateItem): ComponentUpdateItem {
+  return {
+    subject: raw.subject,
+    status: raw.status,
+    currentVersion: raw.current_version,
+    latestVersion: raw.latest_version,
+    message: raw.message,
+    releaseUrl: raw.release_url,
+    assetName: raw.asset_name,
+    assetSha256: raw.asset_sha256,
+  };
+}
+
+function toUpstreamUpdateBlock(raw: RawUpstreamUpdateBlock): UpstreamUpdateBlock {
+  return {
+    status: raw.status,
+    message: raw.message,
+    clirelay: toComponentUpdateItem(raw.clirelay),
+    codeProxy: toComponentUpdateItem(raw.code_proxy),
+    installScope: raw.install_scope,
+    action: raw.action,
+  };
+}
+
+function toComponentInstallResult(
+  raw: RawComponentInstallResult,
+): ComponentInstallResult {
+  return {
+    status: raw.status,
+    message: raw.message,
+    installedScope: raw.installed_scope,
   };
 }
 

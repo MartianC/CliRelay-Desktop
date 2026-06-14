@@ -3,12 +3,15 @@ import { useSyncExternalStore } from "react";
 import {
   checkForUpdates,
   getDesktopSettings,
+  installUpstreamComponentUpdates,
   updateDesktopSettings,
 } from "../bridge/commands";
 import type {
+  ComponentInstallResult,
   DesktopSettings,
   DesktopSettingsPatch,
   ServiceStatus,
+  UpstreamInstallScope,
   UpdateCheckResult,
 } from "../bridge/types";
 import { toErrorMessage } from "./serviceStore";
@@ -25,6 +28,7 @@ export interface SettingsStoreState {
   settings: DesktopSettings | null;
   draft: SettingsDraft | null;
   updateResult: UpdateCheckResult | null;
+  installResult: ComponentInstallResult | null;
   error: string | null;
   isBusy: boolean;
 }
@@ -33,6 +37,7 @@ export interface SettingsCommands {
   getDesktopSettings: typeof getDesktopSettings;
   updateDesktopSettings: typeof updateDesktopSettings;
   checkForUpdates: typeof checkForUpdates;
+  installUpstreamComponentUpdates: typeof installUpstreamComponentUpdates;
 }
 
 export interface SettingsStore {
@@ -41,6 +46,7 @@ export interface SettingsStore {
   load(): Promise<void>;
   setDraft(patch: Partial<SettingsDraft>): void;
   checkUpdates(): Promise<void>;
+  installUpdates(restartAfterInstall: boolean): Promise<void>;
 }
 
 export type PortValidationResult =
@@ -51,6 +57,7 @@ const defaultState: SettingsStoreState = {
   settings: null,
   draft: null,
   updateResult: null,
+  installResult: null,
   error: null,
   isBusy: false,
 };
@@ -82,6 +89,26 @@ export function createPortDraft(settings: DesktopSettings): SettingsDraft {
     portText: String(settings.port),
     autoCheckNewVersions: settings.autoCheckNewVersions,
   };
+}
+
+export function shouldAutoCheckUpdates(
+  settings: DesktopSettings,
+  now = new Date(),
+): boolean {
+  if (!settings.autoCheckNewVersions) {
+    return false;
+  }
+
+  if (!settings.lastUpdateCheckAt) {
+    return true;
+  }
+
+  const lastCheckedAt = new Date(settings.lastUpdateCheckAt);
+  if (Number.isNaN(lastCheckedAt.getTime())) {
+    return true;
+  }
+
+  return now.getTime() - lastCheckedAt.getTime() >= 24 * 60 * 60 * 1000;
 }
 
 export function toSettingsPatch(
@@ -211,8 +238,32 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
     async checkUpdates() {
       beginBusy();
       try {
+        const updateResult = await commands.checkForUpdates();
         endBusy({
-          updateResult: await commands.checkForUpdates(),
+          updateResult,
+          settings: state.settings
+            ? { ...state.settings, lastUpdateCheckAt: updateResult.checkedAt }
+            : state.settings,
+          installResult: null,
+        });
+      } catch (caught) {
+        endBusy({ error: toErrorMessage(caught) });
+      }
+    },
+    async installUpdates(restartAfterInstall) {
+      const scope = state.updateResult?.upstream.installScope ?? "None";
+      if (!canInstallScope(scope)) {
+        emit({ error: "没有可安装的上游组件更新" });
+        return;
+      }
+
+      beginBusy();
+      try {
+        endBusy({
+          installResult: await commands.installUpstreamComponentUpdates(
+            scope,
+            restartAfterInstall,
+          ),
         });
       } catch (caught) {
         endBusy({ error: toErrorMessage(caught) });
@@ -221,10 +272,15 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
   };
 }
 
+function canInstallScope(scope: UpstreamInstallScope): boolean {
+  return scope === "CliRelay" || scope === "codeProxy" || scope === "Both";
+}
+
 export const settingsStore = createSettingsStore({
   getDesktopSettings,
   updateDesktopSettings,
   checkForUpdates,
+  installUpstreamComponentUpdates,
 });
 
 export function useSettingsStore(): SettingsStoreState {

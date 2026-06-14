@@ -107,7 +107,10 @@ impl From<serde_json::Error> for SettingsError {
 
 pub fn ensure_desktop_dirs(paths: &DesktopPaths) -> Result<(), SettingsError> {
     fs::create_dir_all(&paths.runtime_dir)?;
+    fs::create_dir_all(&paths.runtime_sidecar_dir)?;
     fs::create_dir_all(&paths.state_dir)?;
+    fs::create_dir_all(&paths.update_downloads_dir)?;
+    fs::create_dir_all(&paths.update_staging_dir)?;
     fs::create_dir_all(&paths.backups_dir)?;
     fs::create_dir_all(&paths.log_dir)?;
 

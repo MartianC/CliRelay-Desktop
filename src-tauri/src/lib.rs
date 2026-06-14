@@ -1,10 +1,12 @@
 pub mod bootstrap;
 pub mod commands;
+pub mod component_update;
 pub mod paths;
 pub mod platform;
 pub mod service;
 pub mod settings;
 pub mod tray;
+pub mod update_check;
 pub mod windows;
 
 pub const APP_DISPLAY_NAME: &str = "CliRelay Desktop";
@@ -29,6 +31,7 @@ pub fn run() {
             commands::get_desktop_settings,
             commands::update_desktop_settings,
             commands::check_for_updates,
+            commands::install_upstream_component_updates,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

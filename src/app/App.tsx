@@ -5,7 +5,11 @@ import { copyEndpoint, openDataDirectory, openLogDirectory, openSettings } from 
 import { SettingsView } from "../components/SettingsView";
 import { StatusView } from "../components/StatusView";
 import { serviceStore, shouldUseRecoveryView, useServiceStore } from "../stores/serviceStore";
-import { settingsStore, useSettingsStore } from "../stores/settingsStore";
+import {
+  settingsStore,
+  shouldAutoCheckUpdates,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import "../styles/app.css";
 
 type WindowRole = "main" | "settings";
@@ -17,6 +21,7 @@ function App() {
   const settings = useSettingsStore();
   const didRequestPanel = useRef(false);
   const didRequestAutoStart = useRef(false);
+  const didRequestAutoUpdateCheck = useRef(false);
 
   useEffect(() => {
     try {
@@ -38,6 +43,23 @@ function App() {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (
+      didRequestAutoUpdateCheck.current ||
+      !settings.settings ||
+      !shouldAutoCheckUpdates(settings.settings)
+    ) {
+      return;
+    }
+
+    didRequestAutoUpdateCheck.current = true;
+    const timer = window.setTimeout(() => {
+      void settingsStore.checkUpdates();
+    }, 1800);
+
+    return () => window.clearTimeout(timer);
+  }, [settings.settings]);
 
   useEffect(() => {
     if (
@@ -98,10 +120,12 @@ function App() {
         draft={settings.draft}
         serviceSnapshot={service.snapshot}
         updateResult={settings.updateResult}
+        installResult={settings.installResult}
         error={settings.error}
         isBusy={settings.isBusy}
         onDraftChange={settingsStore.setDraft}
         onCheckUpdates={settingsStore.checkUpdates}
+        onInstallUpdates={settingsStore.installUpdates}
         onOpenDataDirectory={openDataDirectory}
         onOpenLogDirectory={openLogDirectory}
       />

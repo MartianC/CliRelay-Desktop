@@ -151,6 +151,7 @@ impl ManagerFixture {
             sidecar.to_path_buf(),
         );
         config.clirelay_version = "mock-sidecar".to_string();
+        config.code_proxy_version = "mock-panel".to_string();
         config.sidecar_sha256 = "mock-sha256".to_string();
         config.desktop_version = "0.1.0-test".to_string();
         config.timeouts = ManagerTimeouts {

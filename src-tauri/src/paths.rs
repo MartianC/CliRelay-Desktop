@@ -6,13 +6,18 @@ pub const APP_DIR_NAME: &str = "CliRelay Desktop";
 pub struct DesktopPaths {
     pub app_data_dir: PathBuf,
     pub runtime_dir: PathBuf,
+    pub runtime_sidecar_dir: PathBuf,
+    pub runtime_sidecar_executable: PathBuf,
     pub state_dir: PathBuf,
+    pub update_downloads_dir: PathBuf,
+    pub update_staging_dir: PathBuf,
     pub backups_dir: PathBuf,
     pub log_dir: PathBuf,
     pub desktop_log: PathBuf,
     pub clirelay_log: PathBuf,
     pub settings_file: PathBuf,
     pub runtime_state_file: PathBuf,
+    pub component_state_file: PathBuf,
     pub config_file: PathBuf,
     pub panel_dir: PathBuf,
 }
@@ -33,19 +38,25 @@ impl DesktopPaths {
         let app_data_dir = app_data_dir.into();
         let log_dir = log_dir.into();
         let runtime_dir = app_data_dir.join("runtime");
+        let runtime_sidecar_dir = runtime_dir.join("sidecar");
         let state_dir = app_data_dir.join("state");
         let backups_dir = app_data_dir.join("backups");
 
         Self {
             app_data_dir,
             runtime_dir: runtime_dir.clone(),
+            runtime_sidecar_dir: runtime_sidecar_dir.clone(),
+            runtime_sidecar_executable: runtime_sidecar_dir.join("cli-proxy-api"),
             state_dir: state_dir.clone(),
+            update_downloads_dir: state_dir.join("downloads"),
+            update_staging_dir: state_dir.join("update-staging"),
             backups_dir,
             log_dir: log_dir.clone(),
             desktop_log: log_dir.join("desktop.log"),
             clirelay_log: log_dir.join("clirelay.log"),
             settings_file: state_dir.join("desktop-settings.json"),
             runtime_state_file: state_dir.join("runtime-state.json"),
+            component_state_file: state_dir.join("component-state.json"),
             config_file: runtime_dir.join("config.yaml"),
             panel_dir: runtime_dir.join("panel"),
         }
@@ -84,6 +95,24 @@ mod tests {
                 "/Users/tester/Library/Application Support/CliRelay Desktop/runtime/panel"
             )
         );
+        assert_eq!(
+            paths.runtime_sidecar_executable,
+            PathBuf::from(
+                "/Users/tester/Library/Application Support/CliRelay Desktop/runtime/sidecar/cli-proxy-api"
+            )
+        );
+        assert_eq!(
+            paths.update_downloads_dir,
+            PathBuf::from(
+                "/Users/tester/Library/Application Support/CliRelay Desktop/state/downloads"
+            )
+        );
+        assert_eq!(
+            paths.update_staging_dir,
+            PathBuf::from(
+                "/Users/tester/Library/Application Support/CliRelay Desktop/state/update-staging"
+            )
+        );
     }
 
     #[test]
@@ -96,6 +125,10 @@ mod tests {
         );
         assert_eq!(
             paths.runtime_state_file.parent(),
+            Some(paths.state_dir.as_path())
+        );
+        assert_eq!(
+            paths.component_state_file.parent(),
             Some(paths.state_dir.as_path())
         );
         assert_eq!(
