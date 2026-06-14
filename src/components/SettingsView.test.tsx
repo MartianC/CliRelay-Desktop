@@ -59,6 +59,7 @@ describe("SettingsView", () => {
     );
 
     expect(html).toContain("settings-layout");
+    expect(html).not.toContain("surface settings-layout");
     expect(html).toContain("settings-sidebar");
     expect(html).toContain('aria-current="page"');
     expect(html).toContain('style="--settings-accent:#1d4ed8"');

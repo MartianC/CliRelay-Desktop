@@ -64,20 +64,10 @@ export function SettingsView(props: SettingsViewProps) {
       className="settings-shell"
       style={{ "--settings-accent": settingsAccent } as CSSProperties}
     >
-      <header className="settings-header">
-        <div>
-          <p className="eyebrow">Settings</p>
-          <h1>CliRelay Desktop</h1>
-        </div>
-        <button type="button" onClick={() => void onSave()} disabled={!canSave}>
-          保存
-        </button>
-      </header>
-
       {!settings || !draft ? (
         <section className="surface empty-state">正在读取设置…</section>
       ) : (
-        <div className="surface settings-layout">
+        <div className="settings-layout">
           <aside className="settings-sidebar" aria-label="Settings navigation">
             <div className="settings-sidebar-title">CliRelay</div>
             <nav className="settings-nav">
@@ -106,6 +96,9 @@ export function SettingsView(props: SettingsViewProps) {
                 <p className="eyebrow">{activeLabel}</p>
                 <h2 id="settings-section-title">{activeLabel}</h2>
               </div>
+              <button type="button" onClick={() => void onSave()} disabled={!canSave}>
+                保存
+              </button>
             </header>
 
             {activeSection === "general" ? (

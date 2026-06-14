@@ -456,31 +456,23 @@ h2 {
 }
 
 .settings-shell {
-  display: grid;
-  gap: 18px;
   --settings-accent: #1d4ed8;
   --settings-accent-soft: #eff6ff;
   --settings-accent-border: #bfdbfe;
-}
-
-.settings-header {
-  align-items: center;
-}
-
-.settings-header > button:not(:disabled) {
-  background: var(--settings-accent);
-  border-color: var(--settings-accent);
-}
-
-.settings-header > button:not(:disabled):hover {
-  background: #1e40af;
-  border-color: #1e40af;
+  background: #fbfcfe;
+  display: grid;
+  gap: 0;
+  min-height: 100vh;
+  overflow: auto;
+  padding: 0;
 }
 
 .settings-layout {
   display: grid;
   grid-template-columns: 184px minmax(0, 1fr);
-  min-height: 560px;
+  height: 100vh;
+  min-height: 100vh;
+  min-width: 720px;
   overflow: hidden;
 }
 
@@ -570,11 +562,22 @@ h2 {
 .settings-content-header {
   align-items: center;
   display: flex;
+  gap: 16px;
   justify-content: space-between;
 }
 
 .settings-content-header h2 {
   font-size: 1.45rem;
+}
+
+.settings-content-header > button:not(:disabled) {
+  background: var(--settings-accent);
+  border-color: var(--settings-accent);
+}
+
+.settings-content-header > button:not(:disabled):hover {
+  background: #1e40af;
+  border-color: #1e40af;
 }
 
 .settings-section {
@@ -718,39 +721,27 @@ h2 {
 }
 
 @media (max-width: 760px) {
-  .app-shell,
-  .settings-shell {
+  .app-shell {
     padding: 18px;
   }
 
   .startup-top,
   .shell-header,
-  .settings-header,
   .startup-footer,
   .external-choice {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .split-layout,
-  .settings-layout {
+  .split-layout {
     grid-template-columns: 1fr;
-  }
-
-  .settings-layout {
-    min-height: 0;
-  }
-
-  .settings-sidebar {
-    border-bottom: 1px solid #d7dee8;
-    border-right: 0;
-  }
-
-  .settings-sidebar-status {
-    margin-top: 16px;
   }
 
   .field-row {
     grid-template-columns: 1fr;
   }
+}
+
+.settings-content .field-row {
+  grid-template-columns: 138px minmax(0, 1fr);
 }
