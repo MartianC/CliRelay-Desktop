@@ -159,12 +159,14 @@ impl DesktopCommandState {
             .unwrap_or_else(|| resources.sidecar_executable.clone());
         let (clirelay_version, code_proxy_version) = current_component_versions(&paths);
         let sidecar_sha256 = current_sidecar_sha256(&paths);
+        let desktop_version = app.package_info().version.to_string();
         let manager_config = ServiceManagerConfig::new(
             paths.clone(),
             settings.clone(),
             resources.config_example,
             resources.panel_dir,
             sidecar_executable,
+            desktop_version,
         );
         let mut manager_config = manager_config;
         manager_config.clirelay_version = clirelay_version;
@@ -203,7 +205,7 @@ impl DesktopCommandState {
     pub fn current_versions(&self) -> CurrentVersions {
         let (clirelay, code_proxy) = current_component_versions(&self.paths);
         CurrentVersions {
-            desktop: env!("CARGO_PKG_VERSION").to_string(),
+            desktop: self.manager.desktop_version().to_string(),
             clirelay,
             code_proxy,
         }
@@ -728,6 +730,32 @@ mod tests {
 
         assert_eq!(endpoint_url(&snapshot), "http://127.0.0.1:8317");
         assert_eq!(v1_endpoint_url(&snapshot), "http://127.0.0.1:8317/v1");
+    }
+
+    #[test]
+    fn current_versions_uses_configured_desktop_app_version() {
+        let paths = crate::paths::DesktopPaths::for_test(
+            std::env::temp_dir().join("clirelay-desktop-command-version-app-data"),
+            std::env::temp_dir().join("clirelay-desktop-command-version-logs"),
+        );
+        let settings = DesktopSettings::default();
+        let manager_config = ServiceManagerConfig::new(
+            paths.clone(),
+            settings.clone(),
+            PathBuf::from("config.example.yaml"),
+            PathBuf::from("panel"),
+            PathBuf::from("cli-proxy-api"),
+            "9.9.9-preview.7",
+        );
+
+        let state = DesktopCommandState::new(
+            paths,
+            settings,
+            ServiceManager::new(manager_config),
+            PathBuf::from("cli-proxy-api"),
+        );
+
+        assert_eq!(state.current_versions().desktop, "9.9.9-preview.7");
     }
 
     fn service_snapshot(port: u16) -> ServiceSnapshot {

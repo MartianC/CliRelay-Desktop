@@ -1,9 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
+  getDesktopVersion,
   getDesktopSettings,
   getServiceSnapshot,
+  openExternalUrl,
   updateDesktopSettings,
 } from "./commands";
 
@@ -11,11 +15,23 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/api/app", () => ({
+  getVersion: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: vi.fn(),
+}));
+
 const invokeMock = vi.mocked(invoke);
+const getVersionMock = vi.mocked(getVersion);
+const openUrlMock = vi.mocked(openUrl);
 
 describe("desktop command bridge", () => {
   beforeEach(() => {
     invokeMock.mockReset();
+    getVersionMock.mockReset();
+    openUrlMock.mockReset();
   });
 
   test("把 Rust service snapshot 映射为前端 camelCase 类型", async () => {
@@ -99,5 +115,20 @@ describe("desktop command bridge", () => {
         port: 8320,
       },
     });
+  });
+
+  test("外部网页通过 Tauri opener 交给系统浏览器打开", async () => {
+    await openExternalUrl("https://github.com/MartianC/CliRelay-Desktop/releases");
+
+    expect(openUrlMock).toHaveBeenCalledWith(
+      "https://github.com/MartianC/CliRelay-Desktop/releases",
+    );
+  });
+
+  test("读取 Desktop 版本时使用 Tauri App metadata", async () => {
+    getVersionMock.mockResolvedValueOnce("0.0.2-preview.3");
+
+    await expect(getDesktopVersion()).resolves.toBe("0.0.2-preview.3");
+    expect(getVersionMock).toHaveBeenCalledTimes(1);
   });
 });

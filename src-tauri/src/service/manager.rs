@@ -61,6 +61,7 @@ impl ServiceManagerConfig {
         bundled_config_example: PathBuf,
         bundled_panel_dir: PathBuf,
         sidecar_executable: PathBuf,
+        desktop_version: impl Into<String>,
     ) -> Self {
         Self {
             paths,
@@ -69,7 +70,7 @@ impl ServiceManagerConfig {
             bundled_panel_dir,
             sidecar_executable,
             host: "127.0.0.1".to_string(),
-            desktop_version: env!("CARGO_PKG_VERSION").to_string(),
+            desktop_version: desktop_version.into(),
             clirelay_version: "unknown".to_string(),
             code_proxy_version: "unknown".to_string(),
             sidecar_sha256: "unknown".to_string(),
@@ -213,6 +214,10 @@ impl ServiceManager {
 
     pub fn ownership(&self) -> ProcessOwnership {
         self.ownership.clone()
+    }
+
+    pub fn desktop_version(&self) -> &str {
+        &self.config.desktop_version
     }
 
     pub fn refresh_runtime_components(

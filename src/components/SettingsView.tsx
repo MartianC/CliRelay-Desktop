@@ -1,12 +1,15 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import type {
   ComponentInstallResult,
   ComponentUpdateItem,
   DesktopSettings,
   ServiceSnapshot,
+  ServiceStatus,
   UpdateCheckResult,
+  UpdateStatus,
 } from "../bridge/types";
+import { getDesktopVersion, openExternalUrl } from "../bridge/commands";
 import type { SettingsDraft } from "../stores/settingsStore";
 import { canEditServicePort, validateServicePort } from "../stores/settingsStore";
 import { FieldRow } from "./FieldRow";
@@ -28,17 +31,28 @@ interface SettingsViewProps {
   initialSection?: SettingsSectionId;
 }
 
-const desktopVersion = "0.0.1-preview.1";
 const settingsAccent = "#1d4ed8";
 
 type SettingsSectionId = "general" | "service" | "update" | "about";
 
 const settingsSections: Array<{ id: SettingsSectionId; label: string }> = [
-  { id: "general", label: "General" },
-  { id: "service", label: "Service" },
-  { id: "update", label: "Update" },
-  { id: "about", label: "About" },
+  { id: "general", label: "通用" },
+  { id: "service", label: "服务" },
+  { id: "update", label: "更新" },
+  { id: "about", label: "关于" },
 ];
+
+const serviceStatusLabels: Record<ServiceStatus, string> = {
+  Stopped: "已停止",
+  Starting: "启动中",
+  Running: "运行中",
+  Stopping: "停止中",
+  Unhealthy: "异常",
+  External: "外部占用",
+  Error: "错误",
+};
+
+const desktopReleaseFallbackUrl = "https://github.com/MartianC/CliRelay-Desktop/releases";
 
 export function SettingsView(props: SettingsViewProps) {
   const {
@@ -57,10 +71,33 @@ export function SettingsView(props: SettingsViewProps) {
     initialSection = "general",
   } = props;
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(initialSection);
+  const [desktopVersion, setDesktopVersion] = useState("正在读取版本");
   const status = serviceSnapshot?.status ?? "Stopped";
   const canEditPort = canEditServicePort(status);
   const portValidation = draft ? validateServicePort(draft.portText) : null;
-  const activeLabel = settingsSections.find((section) => section.id === activeSection)?.label ?? "General";
+  const activeLabel = settingsSections.find((section) => section.id === activeSection)?.label ?? "通用";
+  const lastUpdateCheckAt = updateResult?.checkedAt ?? settings?.lastUpdateCheckAt;
+  const desktopReleaseUrl = updateResult?.desktop.releaseUrl ?? desktopReleaseFallbackUrl;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void getDesktopVersion()
+      .then((version) => {
+        if (isMounted) {
+          setDesktopVersion(version);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setDesktopVersion("未知");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <main
@@ -71,7 +108,7 @@ export function SettingsView(props: SettingsViewProps) {
         <section className="surface empty-state">正在读取设置…</section>
       ) : (
         <div className="settings-layout">
-          <aside className="settings-sidebar" aria-label="Settings navigation">
+          <aside className="settings-sidebar" aria-label="设置导航">
             <div className="settings-sidebar-title">CliRelay</div>
             <nav className="settings-nav">
               {settingsSections.map((section) => (
@@ -87,10 +124,6 @@ export function SettingsView(props: SettingsViewProps) {
                 </button>
               ))}
             </nav>
-            <div className="settings-sidebar-status">
-              <span />
-              Connected
-            </div>
           </aside>
 
           <section className="settings-content" aria-labelledby="settings-section-title">
@@ -102,22 +135,22 @@ export function SettingsView(props: SettingsViewProps) {
             </header>
 
             {activeSection === "general" ? (
-              <SettingsPanel title="Startup">
+              <SettingsPanel title="启动">
                 <ToggleRow
                   label="登录时启动 Desktop"
-                  description="Launch CliRelay Desktop when you log in"
+                  description="登录系统后自动启动 CliRelay Desktop"
                   checked={draft.autoStartApp}
                   onChange={(autoStartApp) => onDraftChange({ autoStartApp })}
                 />
                 <ToggleRow
                   label="启动后自动启动服务"
-                  description="Start CliRelay service when the app opens"
+                  description="打开应用后自动启动 CliRelay 服务"
                   checked={draft.autoStartService}
                   onChange={(autoStartService) => onDraftChange({ autoStartService })}
                 />
                 <ToggleRow
                   label="启动时打开管理面板"
-                  description="Automatically open panel when ready"
+                  description="服务就绪后自动打开管理面板"
                   checked={draft.openPanelOnStart}
                   onChange={(openPanelOnStart) => onDraftChange({ openPanelOnStart })}
                 />
@@ -126,9 +159,9 @@ export function SettingsView(props: SettingsViewProps) {
 
             {activeSection === "service" ? (
               <>
-                <SettingsPanel title="Runtime">
+                <SettingsPanel title="运行状态">
                   <dl className="field-list compact">
-                    <FieldRow label="状态" value={status} />
+                    <FieldRow label="状态" value={serviceStatusLabels[status]} />
                     <FieldRow label="端口">
                       <input
                         className="port-input"
@@ -140,10 +173,10 @@ export function SettingsView(props: SettingsViewProps) {
                     </FieldRow>
                     <FieldRow label="Desktop 版本" value={desktopVersion} mono />
                     <FieldRow label="CliRelay 版本" value={serviceSnapshot?.clirelayVersion} mono />
-                    <FieldRow label="Sidecar SHA-256" value={serviceSnapshot?.sidecarSha256} mono />
+                    {/* <FieldRow label="Sidecar SHA-256" value={serviceSnapshot?.sidecarSha256} mono /> */}
                   </dl>
                   {!canEditPort ? (
-                    <p className="hint">Running / Starting / Unhealthy / External 状态下端口不可编辑。</p>
+                    <p className="hint">运行中、启动中、异常或外部占用状态下端口不可编辑。</p>
                   ) : null}
                   {portValidation && !portValidation.ok ? (
                     <p className="inline-error">{portValidation.message}</p>
@@ -164,10 +197,10 @@ export function SettingsView(props: SettingsViewProps) {
               <>
                 <section className="update-status-strip" aria-label="Update status">
                   <span>
-                    Last checked: <strong>{settings.lastUpdateCheckAt ?? "—"}</strong>
+                    上次检查：<strong>{formatUpdateCheckTime(lastUpdateCheckAt)}</strong>
                   </span>
                   <ToggleRow
-                    label="Auto check daily"
+                    label="每日自动检查"
                     checked={draft.autoCheckNewVersions}
                     onChange={(autoCheckNewVersions) => onDraftChange({ autoCheckNewVersions })}
                   />
@@ -176,8 +209,8 @@ export function SettingsView(props: SettingsViewProps) {
                 <section className="update-block" aria-labelledby="upstream-title">
                   <div className="update-block-header">
                     <div>
-                      <h3 id="upstream-title">Upstream components</h3>
-                      <p>{installResult?.message ?? updateResult?.upstream.message ?? "Not checked yet"}</p>
+                      <h3 id="upstream-title">上游组件</h3>
+                      <p>{installResult?.message ?? updateResult?.upstream.message ?? "尚未检查"}</p>
                     </div>
                     <div className="update-header-actions">
                       {updateResult?.upstream.action === "InstallInDesktop" ? (
@@ -186,7 +219,7 @@ export function SettingsView(props: SettingsViewProps) {
                           disabled={isBusy}
                           onClick={() => void onInstallUpdates(true)}
                         >
-                          Update components
+                          更新组件
                         </button>
                       ) : null}
                       <button
@@ -195,17 +228,17 @@ export function SettingsView(props: SettingsViewProps) {
                         disabled={isBusy}
                         onClick={() => void onCheckUpdates()}
                       >
-                        Check now
+                        立即检查
                       </button>
                     </div>
                   </div>
-                  <div className="component-update-table" role="table" aria-label="Upstream components">
+                  <div className="component-update-table" role="table" aria-label="上游组件">
                     <div className="component-update-row component-update-head" role="row">
-                      <span role="columnheader">Component</span>
-                      <span role="columnheader">Status</span>
-                      <span role="columnheader">Current</span>
-                      <span role="columnheader">Latest</span>
-                      <span role="columnheader">Release</span>
+                      <span role="columnheader">组件</span>
+                      <span role="columnheader">状态</span>
+                      <span role="columnheader">当前版本</span>
+                      <span role="columnheader">最新版本</span>
+                      <span role="columnheader">发布页</span>
                     </div>
                     <ComponentUpdateRow
                       name="CliRelay"
@@ -223,42 +256,39 @@ export function SettingsView(props: SettingsViewProps) {
                 <section className="update-block desktop-preview-block" aria-labelledby="desktop-preview-title">
                   <div className="update-block-header">
                     <div>
-                      <h3 id="desktop-preview-title">Desktop Preview</h3>
-                      <p>{updateResult?.desktop.message ?? "Not checked yet"}</p>
+                      <h3 id="desktop-preview-title">桌面预览版</h3>
+                      <p>{updateResult?.desktop.message ?? "尚未检查"}</p>
+                    </div>
+                    <div className="update-header-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={isBusy}
+                        onClick={() => void onCheckUpdates()}
+                      >
+                        立即检查
+                      </button>
                     </div>
                   </div>
                   <div className="desktop-preview-summary">
                     <div>
-                      <span>Current</span>
+                      <span>当前版本</span>
                       <strong>{desktopVersion}</strong>
                     </div>
                     <div>
-                      <span>Latest</span>
+                      <span>最新版本</span>
                       <strong>{updateResult?.desktop.latestVersion ?? "—"}</strong>
                     </div>
-                    <a
-                      className="button secondary"
-                      href={updateResult?.desktop.releaseUrl ?? "https://github.com/MartianC/CliRelay-Desktop/releases"}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open GitHub Release
-                    </a>
-                  </div>
-                </section>
-
-                {!updateResult ? (
-                  <div className="settings-actions">
                     <button
                       type="button"
-                      className="secondary"
-                      disabled={isBusy}
-                      onClick={() => void onCheckUpdates()}
+                      className="button secondary"
+                      onClick={() => void openExternalUrl(desktopReleaseUrl)}
                     >
-                      Check now
+                      GitHub Release
+                      <ExternalLinkIcon />
                     </button>
                   </div>
-                ) : null}
+                </section>
               </>
             ) : null}
 
@@ -274,13 +304,13 @@ export function SettingsView(props: SettingsViewProps) {
                     <p>CliRelay Desktop 是独立的非官方桌面伴侣。</p>
                   </div>
                 </section>
-                <SettingsPanel title="Product">
+                <SettingsPanel title="产品">
                   <dl className="field-list compact">
-                    <FieldRow label="App" value="CliRelay Desktop" />
+                    <FieldRow label="应用" value="CliRelay Desktop" />
                     <FieldRow label="版本" value={desktopVersion} mono />
-                    <FieldRow label="Channel" value="Preview" />
+                    <FieldRow label="渠道" value="预览版" />
                     <FieldRow label="上游项目" value="CliRelay / codeProxy" />
-                    <FieldRow label="License" value="见 THIRD_PARTY_NOTICES.md" />
+                    <FieldRow label="许可证" value="见 THIRD_PARTY_NOTICES.md" />
                   </dl>
                 </SettingsPanel>
               </>
@@ -312,19 +342,30 @@ function ComponentUpdateRow({
   item,
   currentVersion,
 }: ComponentUpdateRowProps) {
+  const releaseLabel = item?.latestVersion ?? "发布页";
+
   return (
     <div className="component-update-row" role="row">
       <strong role="cell">{name}</strong>
       <span role="cell">
-        <UpdateStatusPill status={item?.status ?? "Unavailable"} label={item?.message ?? "Not checked"} />
+        <UpdateStatusPill
+          status={item?.status ?? "Unavailable"}
+          label={componentUpdateStatusLabel(item)}
+        />
       </span>
       <code role="cell">{item?.currentVersion ?? currentVersion}</code>
       <code role="cell">{item?.latestVersion ?? "—"}</code>
       <span role="cell">
         {item?.releaseUrl ? (
-          <a href={item.releaseUrl} target="_blank" rel="noreferrer">
-            {item.latestVersion ?? "Release"}
-          </a>
+          <button
+            type="button"
+            className="link-button external-link-button"
+            aria-label={`打开 ${name} 发布页`}
+            onClick={() => void openExternalUrl(item.releaseUrl as string)}
+          >
+            {releaseLabel}
+            <ExternalLinkIcon />
+          </button>
         ) : (
           "—"
         )}
@@ -341,6 +382,68 @@ function UpdateStatusPill({
   label: string;
 }) {
   return <span className={`update-status-pill status-${status.toLowerCase()}`}>{label}</span>;
+}
+
+function componentUpdateStatusLabel(item: ComponentUpdateItem | null): string {
+  if (item?.message) {
+    return item.message;
+  }
+
+  return updateStatusLabel(item?.status ?? "Unavailable");
+}
+
+function updateStatusLabel(status: UpdateStatus): string {
+  switch (status) {
+    case "UpdateAvailable":
+      return "有可用更新";
+    case "UpToDate":
+      return "已是最新";
+    case "Error":
+      return "检查失败";
+    case "Unavailable":
+      return "未检查";
+  }
+}
+
+export function formatUpdateCheckTime(
+  value: string | null | undefined,
+  locale = "zh-CN",
+  timeZone?: string,
+): string {
+  if (!value) {
+    return "未检查";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "未检查";
+  }
+
+  const options: Intl.DateTimeFormatOptions = {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  };
+
+  if (timeZone) {
+    options.timeZone = timeZone;
+  }
+
+  return new Intl.DateTimeFormat(locale, options).format(date);
+}
+
+function ExternalLinkIcon() {
+  return (
+    <svg className="external-link-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 5h5v5" />
+      <path d="M13 11 19 5" />
+      <path d="M19 14v4.5A1.5 1.5 0 0 1 17.5 20h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10" />
+    </svg>
+  );
 }
 
 function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {

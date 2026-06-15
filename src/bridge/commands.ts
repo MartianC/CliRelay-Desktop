@@ -1,4 +1,6 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type {
   ComponentInstallResult,
@@ -116,6 +118,14 @@ export async function openLogDirectory(): Promise<void> {
 
 export async function openDataDirectory(): Promise<void> {
   await invoke("open_data_directory");
+}
+
+export async function openExternalUrl(url: string | URL): Promise<void> {
+  await openUrl(url);
+}
+
+export async function getDesktopVersion(): Promise<string> {
+  return getVersion();
 }
 
 export async function copyEndpoint(): Promise<void> {

@@ -84,6 +84,38 @@ fn release_selection_accepts_only_allowed_component_assets_with_sha256_digest() 
 }
 
 #[test]
+fn release_selection_uses_latest_published_release_not_largest_semver() {
+    let older_larger_version = github_release_at(
+        "v9.9.9",
+        Utc.with_ymd_and_hms(2026, 6, 14, 0, 0, 0).unwrap(),
+        vec![asset(
+            "CliRelay_9.9.9_darwin_arm64.tar.gz",
+            "https://github.com/kittors/CliRelay/releases/download/v9.9.9/CliRelay_9.9.9_darwin_arm64.tar.gz",
+            Some(valid_digest("4")),
+        )],
+    );
+    let newer_smaller_version = github_release_at(
+        "v0.4.1",
+        Utc.with_ymd_and_hms(2026, 6, 15, 0, 0, 0).unwrap(),
+        vec![asset(
+            "CliRelay_0.4.1_darwin_arm64.tar.gz",
+            "https://github.com/kittors/CliRelay/releases/download/v0.4.1/CliRelay_0.4.1_darwin_arm64.tar.gz",
+            Some(valid_digest("5")),
+        )],
+    );
+
+    let candidate = select_component_release(
+        &[older_larger_version, newer_smaller_version],
+        UpstreamComponent::CliRelay,
+    )
+    .expect("选择应成功")
+    .expect("应找到发布时间最新的 CliRelay release");
+
+    assert_eq!(candidate.version, "v0.4.1");
+    assert_eq!(candidate.asset_sha256, "5".repeat(64));
+}
+
+#[test]
 fn component_digest_is_required_and_must_be_sha256_hex() {
     assert_eq!(
         validate_component_digest(Some(&valid_digest("a"))).unwrap(),
@@ -146,6 +178,23 @@ fn update_result_keeps_desktop_open_release_separate_from_upstream_install_actio
 }
 
 #[test]
+fn desktop_update_messages_use_chinese_product_label() {
+    let result = build_update_check_result(
+        CurrentVersions {
+            desktop: "0.0.1-preview.1".to_string(),
+            clirelay: "v0.4.0".to_string(),
+            code_proxy: "v0.4.0".to_string(),
+        },
+        None,
+        None,
+        None,
+        Utc.with_ymd_and_hms(2026, 6, 15, 0, 0, 0).unwrap(),
+    );
+
+    assert_eq!(result.desktop.message, "桌面预览版更新源不可用");
+}
+
+#[test]
 fn upstream_install_scope_tracks_which_components_have_updates() {
     let current = CurrentVersions {
         desktop: "0.0.1-preview.1".to_string(),
@@ -205,11 +254,23 @@ fn validate_desktop_preview_fixture() -> clirelay_desktop_lib::update_check::Lat
 }
 
 fn github_release(tag_name: &str, assets: Vec<GithubReleaseAsset>) -> GithubRelease {
+    github_release_at(
+        tag_name,
+        Utc.with_ymd_and_hms(2026, 6, 15, 0, 0, 0).unwrap(),
+        assets,
+    )
+}
+
+fn github_release_at(
+    tag_name: &str,
+    published_at: chrono::DateTime<Utc>,
+    assets: Vec<GithubReleaseAsset>,
+) -> GithubRelease {
     GithubRelease {
         tag_name: tag_name.to_string(),
         prerelease: false,
         draft: false,
-        published_at: Utc.with_ymd_and_hms(2026, 6, 15, 0, 0, 0).unwrap(),
+        published_at,
         html_url: Url::parse(&format!(
             "https://github.com/kittors/CliRelay/releases/tag/{tag_name}"
         ))

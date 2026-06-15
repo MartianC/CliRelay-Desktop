@@ -8,7 +8,7 @@ import {
   installUpstreamComponentUpdates,
 } from "../src/bridge/commands";
 import type { DesktopSettings, ServiceSnapshot } from "../src/bridge/types";
-import { SettingsView } from "../src/components/SettingsView";
+import { formatUpdateCheckTime, SettingsView } from "../src/components/SettingsView";
 import {
   createSettingsStore,
   type SettingsDraft,
@@ -126,10 +126,13 @@ describe("Task15 settings store", () => {
 });
 
 describe("Task15 SettingsView update section", () => {
-  test("按设计稿渲染状态条、上游组件表格和 Desktop Preview 摘要", () => {
+  test("按中文设计规范渲染状态条、上游组件表格和 Desktop 摘要", () => {
     const html = renderToStaticMarkup(
       createElement(SettingsView, {
-        settings,
+        settings: {
+          ...settings,
+          lastUpdateCheckAt: "2026-06-15T09:15:36.253908Z",
+        },
         draft,
         serviceSnapshot: snapshot,
         updateResult: updateResult("Both"),
@@ -145,26 +148,69 @@ describe("Task15 SettingsView update section", () => {
       }),
     );
 
-    expect(html).toContain("Last checked");
-    expect(html).toContain("Auto check daily");
-    expect(html).toContain("Upstream components");
-    expect(html).toContain("Component");
-    expect(html).toContain("Status");
-    expect(html).toContain("Current");
-    expect(html).toContain("Latest");
-    expect(html).toContain("Release");
+    expect(html).toContain("上次检查");
+    expect(html).toContain("2026");
+    expect(html).not.toContain("2026-06-15T09:15:36.253908Z");
+    expect(html).toContain("每日自动检查");
+    expect(html).toContain("上游组件");
+    expect(html).toContain("组件");
+    expect(html).toContain("状态");
+    expect(html).toContain("当前版本");
+    expect(html).toContain("最新版本");
+    expect(html).toContain("发布页");
     expect(html).toContain("CliRelay");
     expect(html).toContain("codeProxy");
-    expect(html).toContain("Update components");
-    expect(html).toContain("Check now");
-    expect(html).toContain("Desktop Preview");
-    expect(html).toContain("Open GitHub Release");
+    expect(html).toContain("更新组件");
+    expect(html).toContain("立即检查");
+    expect(html).toContain("桌面预览版");
+    expect(html).toContain("打开 GitHub Release");
+    expect(html).toContain("external-link-icon");
+    expect(html).not.toContain("Last checked");
+    expect(html).not.toContain("Auto check daily");
+    expect(html).not.toContain("Upstream components");
+    expect(html).not.toContain("Desktop Preview");
     expect(html).not.toContain("CliRelay_0.4.1_darwin_arm64.tar.gz");
     expect(html).not.toContain("panel-dist.zip");
     expect(html).not.toContain("SHA-256");
     expect(html).not.toContain("只作为文本");
     expect(html).not.toContain("Release notes");
     expect(html).not.toContain("Install Desktop");
+  });
+
+  test("未检查时 Desktop 的立即检查按钮位于 Desktop block 内，不再渲染底部独立操作块", () => {
+    const html = renderToStaticMarkup(
+      createElement(SettingsView, {
+        settings,
+        draft,
+        serviceSnapshot: snapshot,
+        updateResult: null,
+        installResult: null,
+        error: null,
+        isBusy: false,
+        initialSection: "update",
+        onDraftChange: vi.fn(),
+        onCheckUpdates: vi.fn(),
+        onInstallUpdates: vi.fn(),
+        onOpenDataDirectory: vi.fn(),
+        onOpenLogDirectory: vi.fn(),
+      }),
+    );
+
+    expect(html.match(/立即检查/g)).toHaveLength(2);
+    expect(html).toContain("desktop-preview-block");
+    expect(html).not.toContain("settings-actions");
+  });
+
+  test("上次检查时间格式化为可读本地格式", () => {
+    const formatted = formatUpdateCheckTime(
+      "2026-06-15T09:15:36.253908Z",
+      "zh-CN",
+      "UTC",
+    );
+
+    expect(formatted).toMatch(/2026.*06.*15.*09.*15.*36/);
+    expect(formatted).not.toContain("T");
+    expect(formatUpdateCheckTime(null)).toBe("未检查");
   });
 });
 

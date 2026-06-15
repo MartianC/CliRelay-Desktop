@@ -355,11 +355,9 @@ mod tests {
             vec![
                 LABEL_STATUS_RUNNING,
                 LABEL_OPEN_PANEL,
-                LABEL_SETTINGS,
                 LABEL_STOP_SERVICE,
                 LABEL_RESTART_SERVICE,
-                LABEL_OPEN_DATA_DIR,
-                LABEL_OPEN_LOG_DIR,
+                LABEL_SETTINGS,
                 LABEL_QUIT,
             ]
         );

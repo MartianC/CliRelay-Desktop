@@ -149,11 +149,11 @@ impl ManagerFixture {
             self.config_example.clone(),
             self.bundled_panel.clone(),
             sidecar.to_path_buf(),
+            "0.1.0-test",
         );
         config.clirelay_version = "mock-sidecar".to_string();
         config.code_proxy_version = "mock-panel".to_string();
         config.sidecar_sha256 = "mock-sha256".to_string();
-        config.desktop_version = "0.1.0-test".to_string();
         config.timeouts = ManagerTimeouts {
             http_ready: Duration::from_secs(3),
             panel_ready: Duration::from_secs(3),

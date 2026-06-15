@@ -64,14 +64,15 @@ describe("SettingsView", () => {
     expect(html).toContain("settings-sidebar");
     expect(html).toContain('aria-current="page"');
     expect(html).toContain('style="--settings-accent:#1d4ed8"');
-    expect(html).toContain("General");
-    expect(html).toContain("Service");
-    expect(html).toContain("Update");
-    expect(html).toContain("About");
+    expect(html).toContain("通用");
+    expect(html).toContain("服务");
+    expect(html).toContain("更新");
+    expect(html).toContain("关于");
     expect(html).toContain("登录时启动 Desktop");
     expect(html).toContain('class="toggle-control"');
     expect(html).not.toContain("保存");
     expect(html).not.toContain("数据目录");
+    expect(html).not.toContain("Connected");
   });
 
   test("Service 页面保留运行态端口禁用提示", () => {
@@ -94,9 +95,33 @@ describe("SettingsView", () => {
       />,
     );
 
-    expect(html).toContain("Service");
+    expect(html).toContain("服务");
     expect(html).toContain("数据目录");
     expect(html).toContain("disabled");
     expect(html).not.toContain("登录时启动 Desktop");
+  });
+
+  test("Settings 页面不再静态渲染硬编码 Desktop 版本", () => {
+    const html = renderToStaticMarkup(
+      <SettingsView
+        settings={settings}
+        draft={draft}
+        serviceSnapshot={snapshot}
+        updateResult={null}
+        installResult={null}
+        error={null}
+        isBusy={false}
+        initialSection="about"
+        onLoad={vi.fn()}
+        onDraftChange={vi.fn()}
+        onCheckUpdates={vi.fn()}
+        onInstallUpdates={vi.fn()}
+        onOpenDataDirectory={vi.fn()}
+        onOpenLogDirectory={vi.fn()}
+      />,
+    );
+
+    expect(html).not.toContain("0.0.1-preview.1");
+    expect(html).toContain("正在读取版本");
   });
 });

@@ -268,10 +268,9 @@ pub fn select_component_release(
     releases: &[GithubRelease],
     component: UpstreamComponent,
 ) -> Result<Option<ComponentUpdateCandidate>, UpdateCheckError> {
-    let mut selected: Option<(&GithubRelease, Version, &GithubReleaseAsset)> = None;
+    let mut selected: Option<(&GithubRelease, &GithubReleaseAsset)> = None;
 
     for release in releases.iter().filter(|release| !release.draft) {
-        let version = parse_semver(&release.tag_name)?;
         let Some(asset) = release
             .assets
             .iter()
@@ -284,13 +283,13 @@ pub fn select_component_release(
         let _ = crate::component_update::validate_component_digest(asset.digest.as_deref())?;
 
         match &selected {
-            Some((_, selected_version, _)) if selected_version >= &version => {}
-            _ => selected = Some((release, version, asset)),
+            Some((selected_release, _)) if selected_release.published_at >= release.published_at => {}
+            _ => selected = Some((release, asset)),
         }
     }
 
     selected
-        .map(|(release, _version, asset)| {
+        .map(|(release, asset)| {
             Ok(ComponentUpdateCandidate {
                 subject: match component {
                     UpstreamComponent::CliRelay => UpdateSubject::CliRelay,
@@ -324,7 +323,7 @@ pub fn build_update_check_result(
                 status: UpdateStatus::UpdateAvailable,
                 current_version: current.desktop.clone(),
                 latest_version: Some(preview.version),
-                message: "发现 Desktop Preview 更新".to_string(),
+                message: "发现桌面预览版更新".to_string(),
                 release_url: Some(preview.release_url.to_string()),
                 action: DesktopUpdateAction::OpenRelease,
                 release_notes_summary: preview.release_notes_summary,
@@ -334,7 +333,7 @@ pub fn build_update_check_result(
                 status: UpdateStatus::UpToDate,
                 current_version: current.desktop.clone(),
                 latest_version: Some(preview.version),
-                message: "Desktop Preview 已是最新".to_string(),
+                message: "桌面预览版已是最新".to_string(),
                 release_url: Some(preview.release_url.to_string()),
                 action: DesktopUpdateAction::None,
                 release_notes_summary: preview.release_notes_summary,
@@ -346,7 +345,7 @@ pub fn build_update_check_result(
             status: UpdateStatus::Unavailable,
             current_version: current.desktop.clone(),
             latest_version: None,
-            message: "Desktop Preview 更新源不可用".to_string(),
+            message: "桌面预览版更新源不可用".to_string(),
             release_url: None,
             action: DesktopUpdateAction::None,
             release_notes_summary: Vec::new(),

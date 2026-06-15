@@ -3,6 +3,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 const appCss = readFileSync(fileURLToPath(new URL("../src/styles/app.css", import.meta.url)), "utf8");
+const designGuide = readFileSync(
+  fileURLToPath(new URL("../docs/dev/settings-frontend-design-guidelines.md", import.meta.url)),
+  "utf8",
+);
+const settingsCapability = readFileSync(
+  fileURLToPath(new URL("../src-tauri/capabilities/settings.json", import.meta.url)),
+  "utf8",
+);
 
 function cssBlock(selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -34,6 +42,38 @@ describe("Settings 样式", () => {
     expect(layout).not.toContain("border:");
     expect(layout).not.toContain("border-radius:");
     expect(layout).not.toContain("box-shadow:");
+  });
+
+  test("右侧内容栏在小窗口内独立滚动", () => {
+    const layout = cssBlock(".settings-layout");
+    const content = cssBlock(".settings-content");
+
+    expect(layout).toContain("height: 100vh");
+    expect(layout).toContain("overflow: hidden");
+    expect(content).toContain("min-height: 0");
+    expect(content).toContain("overflow-y: auto");
+  });
+
+  test("Settings 分栏和间距遵循固定前端设计规范", () => {
+    const layout = cssBlock(".settings-layout");
+    const sidebar = cssBlock(".settings-sidebar");
+    const content = cssBlock(".settings-content");
+    const updateTitle = cssBlock(".update-block-header h3");
+
+    expect(layout).toContain("grid-template-columns: 184px minmax(0, 1fr)");
+    expect(sidebar).toContain("padding: 18px 12px 14px");
+    expect(content).toContain("padding: 20px 22px 24px");
+    expect(updateTitle).toContain("font-size: 0.92rem");
+    expect(designGuide).toContain("Settings 窗口前端设计规范");
+    expect(designGuide).toContain("侧栏宽度固定为 184px");
+  });
+
+  test("Settings 窗口允许通过 opener 打开默认网页", () => {
+    const capability = JSON.parse(settingsCapability) as { permissions: string[] };
+
+    expect(capability.permissions).toContain("opener:allow-open-url");
+    expect(capability.permissions).toContain("opener:allow-default-urls");
+    expect(capability.permissions).not.toContain("opener:default");
   });
 
   test("窄窗口时 Settings 仍保持两栏布局", () => {

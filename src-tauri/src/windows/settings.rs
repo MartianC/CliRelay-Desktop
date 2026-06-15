@@ -7,10 +7,10 @@ pub fn settings_window_spec() -> WindowSpec {
         label: SETTINGS_WINDOW_LABEL,
         title: "CliRelay Desktop Settings",
         size: WindowSizeSpec {
-            width: 720,
-            height: 560,
-            min_width: 720,
-            min_height: 560,
+            width: 900,
+            height: 600,
+            min_width: 900,
+            min_height: 600,
         },
     }
 }
