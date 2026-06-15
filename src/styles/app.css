@@ -469,7 +469,7 @@ h2 {
 
 .settings-layout {
   display: grid;
-  grid-template-columns: 184px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   height: 100vh;
   min-height: 100vh;
   min-width: 720px;
@@ -481,7 +481,7 @@ h2 {
   border-right: 1px solid #d7dee8;
   display: flex;
   flex-direction: column;
-  padding: 18px 12px 14px;
+  padding: 24px 22px 18px;
 }
 
 .settings-sidebar-title {
@@ -556,7 +556,7 @@ h2 {
   display: grid;
   gap: 14px;
   grid-auto-rows: max-content;
-  padding: 20px 22px 24px;
+  padding: 28px 52px 40px;
 }
 
 .settings-content-header {
@@ -615,30 +615,207 @@ h2 {
   margin: 0 15px 15px;
 }
 
-.component-update-summary {
-  border-top: 1px solid #edf2f7;
+.update-status-strip,
+.update-block {
+  background: #ffffff;
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  box-shadow: 0 8px 18px rgb(31 41 51 / 0.04);
+}
+
+.update-status-strip {
+  align-items: center;
   display: grid;
-  gap: 8px;
-  padding: 14px 15px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 70px;
+  padding: 0 20px;
 }
 
-.component-update-summary h4 {
-  color: #253145;
-  font-size: 0.86rem;
-  margin: 0;
-}
-
-.component-update-summary .field-list {
-  gap: 7px;
-}
-
-.update-notes {
-  border-top: 1px solid #edf2f7;
+.update-status-strip > span {
   color: #475467;
+  font-size: 0.95rem;
+}
+
+.update-status-strip > span strong {
+  color: #182230;
+  font-family:
+    "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-weight: 650;
+}
+
+.update-status-strip .toggle-row {
+  border: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.update-status-strip .toggle-row small {
+  display: none;
+}
+
+.update-block {
   display: grid;
-  gap: 7px;
+  overflow: hidden;
+}
+
+.update-block-header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 20px;
+}
+
+.update-block-header h3 {
+  color: #182230;
+  font-size: 1.15rem;
+  line-height: 1.2;
   margin: 0;
-  padding: 13px 15px 15px 32px;
+}
+
+.update-block-header p {
+  color: #667085;
+  margin: 5px 0 0;
+}
+
+.update-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.update-header-actions button:not(.secondary) {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.update-header-actions button:not(.secondary):hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.component-update-table {
+  border-top: 1px solid #e3e9f2;
+  display: grid;
+}
+
+.component-update-row {
+  align-items: center;
+  border-top: 1px solid #edf2f7;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(130px, 1.2fr) minmax(180px, 1.8fr) minmax(95px, 1fr) minmax(95px, 1fr) minmax(86px, 0.8fr);
+  min-height: 74px;
+  padding: 0 20px;
+}
+
+.component-update-row:first-child {
+  border-top: 0;
+}
+
+.component-update-head {
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 750;
+  min-height: 48px;
+  text-transform: uppercase;
+}
+
+.component-update-row strong {
+  color: #182230;
+}
+
+.component-update-row code,
+.desktop-preview-summary strong {
+  color: #182230;
+  font-family:
+    "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92rem;
+}
+
+.component-update-row a {
+  color: #0b63ce;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.component-update-row a:hover {
+  text-decoration: underline;
+}
+
+.update-status-pill {
+  align-items: center;
+  border: 1px solid #d4dae5;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 650;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.update-status-pill::before {
+  border-radius: 50%;
+  content: "";
+  height: 8px;
+  margin-right: 8px;
+  width: 8px;
+}
+
+.update-status-pill.status-updateavailable {
+  background: #fff8eb;
+  border-color: #f5d48b;
+  color: #9a5b00;
+}
+
+.update-status-pill.status-updateavailable::before {
+  background: #e59f19;
+}
+
+.update-status-pill.status-uptodate {
+  background: #eefaf2;
+  border-color: #b9e3c1;
+  color: #20723b;
+}
+
+.update-status-pill.status-uptodate::before {
+  background: #32a852;
+}
+
+.update-status-pill.status-unavailable,
+.update-status-pill.status-error {
+  background: #f7f9fc;
+  color: #667085;
+}
+
+.update-status-pill.status-unavailable::before,
+.update-status-pill.status-error::before {
+  background: #98a2b3;
+}
+
+.desktop-preview-summary {
+  align-items: center;
+  border-top: 1px solid #e3e9f2;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(140px, auto) minmax(140px, auto) minmax(0, 1fr);
+  padding: 18px 20px;
+}
+
+.desktop-preview-summary div {
+  align-items: baseline;
+  display: flex;
+  gap: 14px;
+}
+
+.desktop-preview-summary span {
+  color: #667085;
+  font-weight: 650;
+}
+
+.desktop-preview-summary .button {
+  justify-self: end;
 }
 
 .settings-actions {

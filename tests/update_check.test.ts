@@ -126,7 +126,7 @@ describe("Task15 settings store", () => {
 });
 
 describe("Task15 SettingsView update section", () => {
-  test("渲染 Desktop 与上游组件两个更新区块，并只对上游显示安装按钮", () => {
+  test("按设计稿渲染状态条、上游组件表格和 Desktop Preview 摘要", () => {
     const html = renderToStaticMarkup(
       createElement(SettingsView, {
         settings,
@@ -145,13 +145,26 @@ describe("Task15 SettingsView update section", () => {
       }),
     );
 
-    expect(html).toContain("上游组件");
-    expect(html).toContain("CliRelay_0.4.1_darwin_arm64.tar.gz");
-    expect(html).toContain("panel-dist.zip");
-    expect(html).toContain("更新上游组件");
-    expect(html).toContain("Desktop");
-    expect(html).toContain("打开 GitHub Release");
-    expect(html).not.toContain("安装 Desktop");
+    expect(html).toContain("Last checked");
+    expect(html).toContain("Auto check daily");
+    expect(html).toContain("Upstream components");
+    expect(html).toContain("Component");
+    expect(html).toContain("Status");
+    expect(html).toContain("Current");
+    expect(html).toContain("Latest");
+    expect(html).toContain("Release");
+    expect(html).toContain("CliRelay");
+    expect(html).toContain("codeProxy");
+    expect(html).toContain("Update components");
+    expect(html).toContain("Check now");
+    expect(html).toContain("Desktop Preview");
+    expect(html).toContain("Open GitHub Release");
+    expect(html).not.toContain("CliRelay_0.4.1_darwin_arm64.tar.gz");
+    expect(html).not.toContain("panel-dist.zip");
+    expect(html).not.toContain("SHA-256");
+    expect(html).not.toContain("只作为文本");
+    expect(html).not.toContain("Release notes");
+    expect(html).not.toContain("Install Desktop");
   });
 });
 

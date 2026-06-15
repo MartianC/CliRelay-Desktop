@@ -5,7 +5,6 @@ import type {
   ComponentUpdateItem,
   DesktopSettings,
   ServiceSnapshot,
-  UpstreamUpdateBlock,
   UpdateCheckResult,
 } from "../bridge/types";
 import type { SettingsDraft } from "../stores/settingsStore";
@@ -163,82 +162,103 @@ export function SettingsView(props: SettingsViewProps) {
 
             {activeSection === "update" ? (
               <>
-                <SettingsPanel title="上游组件">
-                  <dl className="field-list compact">
-                    <FieldRow label="最后检查" value={settings.lastUpdateCheckAt ?? "—"} mono />
-                    <FieldRow label="检查结果" value={updateResult?.upstream.message ?? "尚未检查"} />
-                    <FieldRow label="安装结果" value={installResult?.message ?? "—"} />
-                  </dl>
-                  <ComponentUpdateSummary
-                    title="CliRelay"
-                    item={updateResult?.upstream.clirelay ?? null}
-                    currentVersion={serviceSnapshot?.clirelayVersion ?? "unknown"}
-                  />
-                  <ComponentUpdateSummary
-                    title="codeProxy"
-                    item={updateResult?.upstream.codeProxy ?? null}
-                    currentVersion={serviceSnapshot?.codeProxyVersion ?? "unknown"}
-                  />
+                <section className="update-status-strip" aria-label="Update status">
+                  <span>
+                    Last checked: <strong>{settings.lastUpdateCheckAt ?? "—"}</strong>
+                  </span>
                   <ToggleRow
-                    label="自动检查新版本"
-                    description="Check Preview updates automatically"
+                    label="Auto check daily"
                     checked={draft.autoCheckNewVersions}
                     onChange={(autoCheckNewVersions) => onDraftChange({ autoCheckNewVersions })}
                   />
-                </SettingsPanel>
-                <div className="settings-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={isBusy}
-                    onClick={() => void onCheckUpdates()}
-                  >
-                    {upstreamButtonLabel(updateResult?.upstream ?? null)}
-                  </button>
-                  {updateResult?.upstream.action === "InstallInDesktop" ? (
+                </section>
+
+                <section className="update-block" aria-labelledby="upstream-title">
+                  <div className="update-block-header">
+                    <div>
+                      <h3 id="upstream-title">Upstream components</h3>
+                      <p>{installResult?.message ?? updateResult?.upstream.message ?? "Not checked yet"}</p>
+                    </div>
+                    <div className="update-header-actions">
+                      {updateResult?.upstream.action === "InstallInDesktop" ? (
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void onInstallUpdates(true)}
+                        >
+                          Update components
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={isBusy}
+                        onClick={() => void onCheckUpdates()}
+                      >
+                        Check now
+                      </button>
+                    </div>
+                  </div>
+                  <div className="component-update-table" role="table" aria-label="Upstream components">
+                    <div className="component-update-row component-update-head" role="row">
+                      <span role="columnheader">Component</span>
+                      <span role="columnheader">Status</span>
+                      <span role="columnheader">Current</span>
+                      <span role="columnheader">Latest</span>
+                      <span role="columnheader">Release</span>
+                    </div>
+                    <ComponentUpdateRow
+                      name="CliRelay"
+                      item={updateResult?.upstream.clirelay ?? null}
+                      currentVersion={serviceSnapshot?.clirelayVersion ?? "unknown"}
+                    />
+                    <ComponentUpdateRow
+                      name="codeProxy"
+                      item={updateResult?.upstream.codeProxy ?? null}
+                      currentVersion={serviceSnapshot?.codeProxyVersion ?? "unknown"}
+                    />
+                  </div>
+                </section>
+
+                <section className="update-block desktop-preview-block" aria-labelledby="desktop-preview-title">
+                  <div className="update-block-header">
+                    <div>
+                      <h3 id="desktop-preview-title">Desktop Preview</h3>
+                      <p>{updateResult?.desktop.message ?? "Not checked yet"}</p>
+                    </div>
+                  </div>
+                  <div className="desktop-preview-summary">
+                    <div>
+                      <span>Current</span>
+                      <strong>{desktopVersion}</strong>
+                    </div>
+                    <div>
+                      <span>Latest</span>
+                      <strong>{updateResult?.desktop.latestVersion ?? "—"}</strong>
+                    </div>
+                    <a
+                      className="button secondary"
+                      href={updateResult?.desktop.releaseUrl ?? "https://github.com/MartianC/CliRelay-Desktop/releases"}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open GitHub Release
+                    </a>
+                  </div>
+                </section>
+
+                {!updateResult ? (
+                  <div className="settings-actions">
                     <button
                       type="button"
+                      className="secondary"
                       disabled={isBusy}
-                      onClick={() => void onInstallUpdates(true)}
+                      onClick={() => void onCheckUpdates()}
                     >
-                      更新上游组件
+                      Check now
                     </button>
-                  ) : null}
-                </div>
-
-                <SettingsPanel title="Desktop">
-                  <dl className="field-list compact">
-                    <FieldRow label="通道" value="Preview" />
-                    <FieldRow label="当前版本" value={desktopVersion} mono />
-                    <FieldRow label="最新版本" value={updateResult?.desktop.latestVersion ?? "—"} mono />
-                    <FieldRow label="检查结果" value={updateResult?.desktop.message ?? "尚未检查"} />
-                  </dl>
-                  {updateResult?.desktop.releaseNotesSummary.length ? (
-                    <ul className="update-notes">
-                      {updateResult.desktop.releaseNotesSummary.map((note) => (
-                        <li key={note}>{note}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </SettingsPanel>
-                <div className="settings-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={isBusy}
-                    onClick={() => void onCheckUpdates()}
-                  >
-                    手动检查
-                  </button>
-                  <a
-                    className="button ghost"
-                    href={updateResult?.desktop.releaseUrl ?? "https://github.com/MartianC/CliRelay-Desktop/releases"}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    打开 GitHub Release
-                  </a>
-                </div>
+                  </div>
+                ) : null}
               </>
             ) : null}
 
@@ -281,41 +301,46 @@ interface ToggleRowProps {
   onChange: (checked: boolean) => void;
 }
 
-interface ComponentUpdateSummaryProps {
-  title: string;
+interface ComponentUpdateRowProps {
+  name: string;
   item: ComponentUpdateItem | null;
   currentVersion: string;
 }
 
-function ComponentUpdateSummary({
-  title,
+function ComponentUpdateRow({
+  name,
   item,
   currentVersion,
-}: ComponentUpdateSummaryProps) {
+}: ComponentUpdateRowProps) {
   return (
-    <section className="component-update-summary">
-      <h4>{title}</h4>
-      <dl className="field-list compact">
-        <FieldRow label="当前运行时版本" value={item?.currentVersion ?? currentVersion} mono />
-        <FieldRow label="最新上游版本" value={item?.latestVersion ?? "—"} mono />
-        <FieldRow label="组件状态" value={item?.message ?? "尚未检查"} />
-        <FieldRow label="Asset" value={item?.assetName ?? "—"} mono />
-        <FieldRow label="SHA-256" value={item?.assetSha256 ?? "—"} mono />
-      </dl>
-    </section>
+    <div className="component-update-row" role="row">
+      <strong role="cell">{name}</strong>
+      <span role="cell">
+        <UpdateStatusPill status={item?.status ?? "Unavailable"} label={item?.message ?? "Not checked"} />
+      </span>
+      <code role="cell">{item?.currentVersion ?? currentVersion}</code>
+      <code role="cell">{item?.latestVersion ?? "—"}</code>
+      <span role="cell">
+        {item?.releaseUrl ? (
+          <a href={item.releaseUrl} target="_blank" rel="noreferrer">
+            {item.latestVersion ?? "Release"}
+          </a>
+        ) : (
+          "—"
+        )}
+      </span>
+    </div>
   );
 }
 
-function upstreamButtonLabel(upstream: UpstreamUpdateBlock | null): string {
-  if (!upstream || upstream.action === "Check") {
-    return "检查上游更新";
-  }
-
-  if (upstream.action === "InstallInDesktop") {
-    return "重新检查";
-  }
-
-  return "检查上游更新";
+function UpdateStatusPill({
+  status,
+  label,
+}: {
+  status: ComponentUpdateItem["status"];
+  label: string;
+}) {
+  return <span className={`update-status-pill status-${status.toLowerCase()}`}>{label}</span>;
 }
 
 function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
