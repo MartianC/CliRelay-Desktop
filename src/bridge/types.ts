@@ -33,6 +33,7 @@ export interface DesktopSettings {
   port: number;
   autoCheckNewVersions: boolean;
   lastUpdateCheckAt: string | null;
+  lastUpdateCheckResult: UpdateCheckResult | null;
 }
 
 export interface DesktopSettingsPatch {

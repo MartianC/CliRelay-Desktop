@@ -6,6 +6,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::paths::DesktopPaths;
+use crate::update_check::UpdateCheckResult;
 
 pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
 pub const DEFAULT_SERVICE_PORT: u16 = 8317;
@@ -28,6 +29,8 @@ pub struct DesktopSettings {
     pub auto_check_new_versions: bool,
     #[serde(alias = "lastUpdateCheckAt")]
     pub last_update_check_at: Option<DateTime<Utc>>,
+    #[serde(default, alias = "lastUpdateCheckResult")]
+    pub last_update_check_result: Option<UpdateCheckResult>,
 }
 
 impl Default for DesktopSettings {
@@ -41,6 +44,7 @@ impl Default for DesktopSettings {
             port: DEFAULT_SERVICE_PORT,
             auto_check_new_versions: false,
             last_update_check_at: None,
+            last_update_check_result: None,
         }
     }
 }

@@ -41,6 +41,7 @@ interface RawDesktopSettings {
   port: number;
   auto_check_new_versions: boolean;
   last_update_check_at: string | null;
+  last_update_check_result?: RawUpdateCheckResult | null;
 }
 
 interface RawDesktopUpdateItem {
@@ -252,6 +253,9 @@ function toDesktopSettings(raw: RawDesktopSettings): DesktopSettings {
     port: raw.port,
     autoCheckNewVersions: raw.auto_check_new_versions,
     lastUpdateCheckAt: raw.last_update_check_at,
+    lastUpdateCheckResult: raw.last_update_check_result
+      ? toUpdateCheckResult(raw.last_update_check_result)
+      : null,
   };
 }
 

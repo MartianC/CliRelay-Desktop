@@ -223,6 +223,7 @@ const settings: DesktopSettings = {
   port: 8317,
   autoCheckNewVersions: false,
   lastUpdateCheckAt: null,
+  lastUpdateCheckResult: null,
 };
 
 const draft: SettingsDraft = {

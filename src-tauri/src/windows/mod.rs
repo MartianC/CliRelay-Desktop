@@ -221,9 +221,9 @@ mod tests {
         assert_eq!(spec.label, "settings");
         assert_eq!(spec.title, "CliRelay Desktop Settings");
         assert_eq!(spec.size.width, 900);
-        assert_eq!(spec.size.height, 560);
+        assert_eq!(spec.size.height, 600);
         assert_eq!(spec.size.min_width, 900);
-        assert_eq!(spec.size.min_height, 560);
+        assert_eq!(spec.size.min_height, 600);
     }
 
     #[test]

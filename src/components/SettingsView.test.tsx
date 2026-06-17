@@ -14,6 +14,7 @@ const settings: DesktopSettings = {
   port: 8317,
   autoCheckNewVersions: false,
   lastUpdateCheckAt: null,
+  lastUpdateCheckResult: null,
 };
 
 const draft: SettingsDraft = {
@@ -68,6 +69,10 @@ describe("SettingsView", () => {
     expect(html).toContain("服务");
     expect(html).toContain("更新");
     expect(html).toContain("关于");
+    expect(html).toContain('data-nav-icon="general"');
+    expect(html).toContain('data-nav-icon="service"');
+    expect(html).toContain('data-nav-icon="update"');
+    expect(html).toContain('data-nav-icon="about"');
     expect(html).toContain("登录时启动 Desktop");
     expect(html).toContain('class="toggle-control"');
     expect(html).not.toContain("保存");

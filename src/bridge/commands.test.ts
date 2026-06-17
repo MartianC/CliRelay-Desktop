@@ -76,9 +76,53 @@ describe("desktop command bridge", () => {
       port: 8318,
       auto_check_new_versions: true,
       last_update_check_at: "2026-06-13T12:00:00Z",
+      last_update_check_result: {
+        status: "UpToDate",
+        message: "已是最新",
+        checked_at: "2026-06-13T12:00:00Z",
+        desktop: {
+          subject: "Desktop",
+          status: "UpToDate",
+          current_version: "0.0.1-preview.1",
+          latest_version: "0.0.1-preview.1",
+          message: "桌面预览版已是最新",
+          release_url:
+            "https://github.com/MartianC/CliRelay-Desktop/releases/tag/v0.0.1-preview.1",
+          action: "None",
+          release_notes_summary: [],
+        },
+        upstream: {
+          status: "UpToDate",
+          message: "上游组件已是最新",
+          clirelay: {
+            subject: "CliRelay",
+            status: "UpToDate",
+            current_version: "v0.4.0",
+            latest_version: "v0.4.0",
+            message: "CliRelay 已是最新",
+            release_url: "https://github.com/kittors/CliRelay/releases/tag/v0.4.0",
+            asset_name: null,
+            asset_sha256: null,
+          },
+          code_proxy: {
+            subject: "codeProxy",
+            status: "UpToDate",
+            current_version: "v0.4.0",
+            latest_version: "v0.4.0",
+            message: "codeProxy 已是最新",
+            release_url: "https://github.com/kittors/codeProxy/releases/tag/v0.4.0",
+            asset_name: null,
+            asset_sha256: null,
+          },
+          install_scope: "None",
+          action: "Check",
+        },
+      },
     });
 
-    await expect(getDesktopSettings()).resolves.toEqual({
+    const result = await getDesktopSettings();
+
+    expect(result).toMatchObject({
       schemaVersion: 1,
       firstRunCompleted: false,
       autoStartApp: true,
@@ -87,7 +131,16 @@ describe("desktop command bridge", () => {
       port: 8318,
       autoCheckNewVersions: true,
       lastUpdateCheckAt: "2026-06-13T12:00:00Z",
+      lastUpdateCheckResult: {
+        checkedAt: "2026-06-13T12:00:00Z",
+        upstream: {
+          codeProxy: {
+            releaseUrl: "https://github.com/kittors/codeProxy/releases/tag/v0.4.0",
+          },
+        },
+      },
     });
+    expect(result).not.toHaveProperty("last_update_check_result");
   });
 
   test("更新 Desktop settings 时只发送 Rust 白名单 patch 字段", async () => {

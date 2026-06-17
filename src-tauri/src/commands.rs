@@ -517,6 +517,7 @@ pub fn check_for_updates(
     {
         let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
         state.settings.last_update_check_at = Some(checked_at);
+        state.settings.last_update_check_result = Some(result.clone());
         save_settings(&state.paths, &state.settings)?;
     }
 

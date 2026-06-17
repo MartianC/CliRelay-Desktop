@@ -219,6 +219,8 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
         endBusy({
           settings,
           draft: createPortDraft(settings),
+          updateResult: settings.lastUpdateCheckResult,
+          installResult: null,
         });
       } catch (caught) {
         endBusy({ error: toErrorMessage(caught) });
@@ -242,7 +244,11 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
         endBusy({
           updateResult,
           settings: state.settings
-            ? { ...state.settings, lastUpdateCheckAt: updateResult.checkedAt }
+            ? {
+                ...state.settings,
+                lastUpdateCheckAt: updateResult.checkedAt,
+                lastUpdateCheckResult: updateResult,
+              }
             : state.settings,
           installResult: null,
         });

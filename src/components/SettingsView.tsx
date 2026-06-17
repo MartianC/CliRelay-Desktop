@@ -109,7 +109,7 @@ export function SettingsView(props: SettingsViewProps) {
       ) : (
         <div className="settings-layout">
           <aside className="settings-sidebar" aria-label="设置导航">
-            <div className="settings-sidebar-title">CliRelay</div>
+            <div className="settings-sidebar-title">CliRelay Desktop</div>
             <nav className="settings-nav">
               {settingsSections.map((section) => (
                 <button
@@ -282,6 +282,7 @@ export function SettingsView(props: SettingsViewProps) {
                     <button
                       type="button"
                       className="button secondary"
+                      aria-label="打开 GitHub Release"
                       onClick={() => void openExternalUrl(desktopReleaseUrl)}
                     >
                       GitHub Release
@@ -481,30 +482,44 @@ function SettingsPanel({ title, children }: SettingsPanelProps) {
 
 function NavIcon({ id }: { id: SettingsSectionId }) {
   return (
-    <svg className="settings-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <svg
+      className="settings-nav-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      data-nav-icon={id}
+    >
       {id === "general" ? (
         <>
-          <circle cx="12" cy="12" r="3.5" />
-          <path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5l2.6-1.5M17.2 9l2.6-1.5" />
+          <path d="M4 7h6" />
+          <path d="M14 7h6" />
+          <circle cx="12" cy="7" r="2" />
+          <path d="M4 17h10" />
+          <path d="M18 17h2" />
+          <circle cx="16" cy="17" r="2" />
         </>
       ) : null}
       {id === "service" ? (
         <>
-          <rect x="5" y="4" width="14" height="5" rx="1.5" />
-          <rect x="5" y="15" width="14" height="5" rx="1.5" />
-          <path d="M8 9v6M16 9v6M8 6.5h.01M8 17.5h.01" />
+          <rect x="4" y="5" width="16" height="6" rx="2" />
+          <rect x="4" y="13" width="16" height="6" rx="2" />
+          <path d="M8 8h.01" />
+          <path d="M8 16h.01" />
         </>
       ) : null}
       {id === "update" ? (
         <>
-          <path d="M6 15.5a5 5 0 0 1 8.7-4.5A3.8 3.8 0 0 1 20 14.5c0 2-1.6 3.5-3.6 3.5H7.4A3.4 3.4 0 0 1 6 11.5" />
-          <path d="M12 7v7M9.5 11.5 12 14l2.5-2.5" />
+          <path d="M20 6v5h-5" />
+          <path d="M4 18v-5h5" />
+          <path d="M18.4 10A7 7 0 0 0 6.1 7.4L4 9.5" />
+          <path d="M5.6 14a7 7 0 0 0 12.3 2.6L20 14.5" />
         </>
       ) : null}
       {id === "about" ? (
         <>
-          <circle cx="12" cy="12" r="8.5" />
-          <path d="M12 10.5v5M12 7.5h.01" />
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 11v5" />
+          <path d="M12 8h.01" />
         </>
       ) : null}
     </svg>

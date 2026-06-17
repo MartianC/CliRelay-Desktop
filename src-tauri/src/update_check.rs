@@ -124,7 +124,7 @@ pub struct ComponentUpdateCandidate {
     pub asset_sha256: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DesktopUpdateItem {
     pub subject: UpdateSubject,
     pub status: UpdateStatus,
@@ -136,7 +136,7 @@ pub struct DesktopUpdateItem {
     pub release_notes_summary: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ComponentUpdateItem {
     pub subject: UpdateSubject,
     pub status: UpdateStatus,
@@ -148,7 +148,7 @@ pub struct ComponentUpdateItem {
     pub asset_sha256: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct UpstreamUpdateBlock {
     pub status: UpdateStatus,
     pub message: String,
@@ -158,7 +158,7 @@ pub struct UpstreamUpdateBlock {
     pub action: UpstreamUpdateAction,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct UpdateCheckResult {
     pub status: UpdateStatus,
     pub message: String,
@@ -283,7 +283,8 @@ pub fn select_component_release(
         let _ = crate::component_update::validate_component_digest(asset.digest.as_deref())?;
 
         match &selected {
-            Some((selected_release, _)) if selected_release.published_at >= release.published_at => {}
+            Some((selected_release, _))
+                if selected_release.published_at >= release.published_at => {}
             _ => selected = Some((release, asset)),
         }
     }

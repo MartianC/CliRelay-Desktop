@@ -486,9 +486,9 @@ h2 {
 
 .settings-sidebar-title {
   color: #122033;
-  font-size: 1.15rem;
+  font-size: 1.0rem;
   font-weight: 850;
-  margin: 0 8px 14px;
+  margin: 0 8px 8px;
 }
 
 .settings-nav {
@@ -524,12 +524,16 @@ h2 {
 }
 
 .settings-nav-icon {
+  display: block;
   fill: none;
+  flex: 0 0 auto;
   height: 18px;
+  overflow: visible;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.9;
+  vector-effect: non-scaling-stroke;
   width: 18px;
 }
 
