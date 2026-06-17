@@ -4,12 +4,14 @@ use crate::{
     service::manager::{ManagerError, ServiceSnapshot},
 };
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     AppHandle, Manager, Runtime,
 };
 
 pub const TRAY_ID: &str = "clirelay-desktop-tray";
+const TRAY_ICON: Image<'_> = tauri::include_image!("./icons/tray-template.png");
 pub const LABEL_STATUS_RUNNING: &str = "CliRelay ● 运行中";
 pub const LABEL_STATUS_STOPPED: &str = "CliRelay ● 已停止";
 pub const LABEL_STATUS_STARTING: &str = "CliRelay ● 启动中";
@@ -96,7 +98,8 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let menu = build_tray_menu(app, status)?;
 
     TrayIconBuilder::with_id(TRAY_ID)
-        .title("CliRelay")
+        .icon(TRAY_ICON)
+        .icon_as_template(true)
         .tooltip(crate::APP_DISPLAY_NAME)
         .menu(&menu)
         .show_menu_on_left_click(true)
