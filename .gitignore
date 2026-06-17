@@ -17,6 +17,18 @@ src-tauri/binaries/*
 src-tauri/resources/config.example.yaml
 src-tauri/resources/panel/
 
+# Tauri icon 生成的当前桌面包未引用产物
+src-tauri/icons/64x64.png
+src-tauri/icons/android/
+src-tauri/icons/ios/
+
+# 本地图标设计草稿和候选预览
+docs/icon-candidates/
+docs/superpowers/
+docs/dev/
+public/Untitled.icon/
+public/Untitled-*.png
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

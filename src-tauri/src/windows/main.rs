@@ -20,7 +20,7 @@ pub fn main_window_spec() -> WindowSpec {
         title: "CliRelay Desktop",
         size: WindowSizeSpec {
             width: 1200,
-            height: 800,
+            height: 900,
             min_width: 900,
             min_height: 600,
         },

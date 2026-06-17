@@ -58,7 +58,7 @@ pub fn show_panel_window<R: tauri::Runtime>(
     let window =
         WebviewWindowBuilder::new(app, PANEL_WINDOW_LABEL, WebviewUrl::External(target_url))
             .title(panel_window_title())
-            .inner_size(1200.0, 800.0)
+            .inner_size(1200.0, 900.0)
             .min_inner_size(900.0, 600.0)
             .center()
             .on_navigation(move |url| {
