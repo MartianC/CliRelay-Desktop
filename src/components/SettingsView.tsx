@@ -22,6 +22,7 @@ interface SettingsViewProps {
   installResult: ComponentInstallResult | null;
   error: string | null;
   isBusy: boolean;
+  isCheckingUpdates: boolean;
   onLoad?: () => void | Promise<void>;
   onDraftChange: (patch: Partial<SettingsDraft>) => void;
   onCheckUpdates: () => void | Promise<void>;
@@ -63,6 +64,7 @@ export function SettingsView(props: SettingsViewProps) {
     installResult,
     error,
     isBusy,
+    isCheckingUpdates,
     onDraftChange,
     onCheckUpdates,
     onInstallUpdates,
@@ -132,6 +134,24 @@ export function SettingsView(props: SettingsViewProps) {
                 <p className="eyebrow">{activeLabel}</p>
                 <h2 id="settings-section-title">{activeLabel}</h2>
               </div>
+              {activeSection === "update" ? (
+                <div className="settings-header-actions update-header-actions">
+                  {updateResult?.upstream.action === "InstallInDesktop" ? (
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => void onInstallUpdates(true)}
+                    >
+                      更新组件
+                    </button>
+                  ) : null}
+                  <CheckUpdatesButton
+                    disabled={isBusy}
+                    isChecking={isCheckingUpdates}
+                    onCheckUpdates={onCheckUpdates}
+                  />
+                </div>
+              ) : null}
             </header>
 
             {activeSection === "general" ? (
@@ -212,25 +232,6 @@ export function SettingsView(props: SettingsViewProps) {
                       <h3 id="upstream-title">上游组件</h3>
                       <p>{installResult?.message ?? updateResult?.upstream.message ?? "尚未检查"}</p>
                     </div>
-                    <div className="update-header-actions">
-                      {updateResult?.upstream.action === "InstallInDesktop" ? (
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => void onInstallUpdates(true)}
-                        >
-                          更新组件
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={isBusy}
-                        onClick={() => void onCheckUpdates()}
-                      >
-                        立即检查
-                      </button>
-                    </div>
                   </div>
                   <div className="component-update-table" role="table" aria-label="上游组件">
                     <div className="component-update-row component-update-head" role="row">
@@ -258,16 +259,6 @@ export function SettingsView(props: SettingsViewProps) {
                     <div>
                       <h3 id="desktop-preview-title">桌面预览版</h3>
                       <p>{updateResult?.desktop.message ?? "尚未检查"}</p>
-                    </div>
-                    <div className="update-header-actions">
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={isBusy}
-                        onClick={() => void onCheckUpdates()}
-                      >
-                        立即检查
-                      </button>
                     </div>
                   </div>
                   <div className="desktop-preview-summary">
@@ -336,6 +327,37 @@ interface ComponentUpdateRowProps {
   name: string;
   item: ComponentUpdateItem | null;
   currentVersion: string;
+}
+
+interface CheckUpdatesButtonProps {
+  disabled: boolean;
+  isChecking: boolean;
+  onCheckUpdates: () => void | Promise<void>;
+}
+
+function CheckUpdatesButton({
+  disabled,
+  isChecking,
+  onCheckUpdates,
+}: CheckUpdatesButtonProps) {
+  return (
+    <button
+      type="button"
+      className="secondary check-updates-button"
+      disabled={disabled || isChecking}
+      aria-busy={isChecking}
+      onClick={() => void onCheckUpdates()}
+    >
+      {isChecking ? (
+        <>
+          <span className="button-spinner" aria-hidden="true" />
+          <span>检查中...</span>
+        </>
+      ) : (
+        "立即检查"
+      )}
+    </button>
+  );
 }
 
 function ComponentUpdateRow({

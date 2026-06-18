@@ -123,6 +123,38 @@ describe("Task15 settings store", () => {
     expect(installUpstreamComponentUpdates).toHaveBeenCalledWith("CliRelay", true);
     expect(store.getState().installResult?.message).toBe("已更新");
   });
+
+  test("更新检查期间暴露独立 loading 状态并忽略重复点击", async () => {
+    let resolveCheck!: (result: ReturnType<typeof updateResult>) => void;
+    const checkForUpdates = vi.fn(
+      () =>
+        new Promise<ReturnType<typeof updateResult>>((resolve) => {
+          resolveCheck = resolve;
+        }),
+    );
+    const store = createSettingsStore({
+      getDesktopSettings: vi.fn(async () => settings),
+      updateDesktopSettings: vi.fn(),
+      checkForUpdates,
+      installUpstreamComponentUpdates: vi.fn(),
+    });
+
+    await store.load();
+
+    const firstCheck = store.checkUpdates();
+    const secondCheck = store.checkUpdates();
+
+    expect(checkForUpdates).toHaveBeenCalledTimes(1);
+    expect(store.getState().isCheckingUpdates).toBe(true);
+    expect(store.getState().isBusy).toBe(true);
+
+    resolveCheck(updateResult("None"));
+    await firstCheck;
+    await secondCheck;
+
+    expect(store.getState().isCheckingUpdates).toBe(false);
+    expect(store.getState().isBusy).toBe(false);
+  });
 });
 
 describe("Task15 SettingsView update section", () => {
@@ -139,6 +171,7 @@ describe("Task15 SettingsView update section", () => {
         installResult: null,
         error: null,
         isBusy: false,
+        isCheckingUpdates: false,
         initialSection: "update",
         onDraftChange: vi.fn(),
         onCheckUpdates: vi.fn(),
@@ -162,6 +195,8 @@ describe("Task15 SettingsView update section", () => {
     expect(html).toContain("codeProxy");
     expect(html).toContain("更新组件");
     expect(html).toContain("立即检查");
+    expect(html.match(/立即检查/g) ?? []).toHaveLength(1);
+    expect(html).toContain("settings-header-actions");
     expect(html).toContain("桌面预览版");
     expect(html).toContain("打开 GitHub Release");
     expect(html).toContain("external-link-icon");
@@ -177,7 +212,7 @@ describe("Task15 SettingsView update section", () => {
     expect(html).not.toContain("Install Desktop");
   });
 
-  test("未检查时 Desktop 的立即检查按钮位于 Desktop block 内，不再渲染底部独立操作块", () => {
+  test("未检查时只在更新页标题区渲染立即检查按钮", () => {
     const html = renderToStaticMarkup(
       createElement(SettingsView, {
         settings,
@@ -187,6 +222,7 @@ describe("Task15 SettingsView update section", () => {
         installResult: null,
         error: null,
         isBusy: false,
+        isCheckingUpdates: false,
         initialSection: "update",
         onDraftChange: vi.fn(),
         onCheckUpdates: vi.fn(),
@@ -196,9 +232,36 @@ describe("Task15 SettingsView update section", () => {
       }),
     );
 
-    expect(html.match(/立即检查/g)).toHaveLength(2);
+    expect(html.match(/立即检查/g)).toHaveLength(1);
+    expect(html).toContain("settings-header-actions");
     expect(html).toContain("desktop-preview-block");
     expect(html).not.toContain("settings-actions");
+  });
+
+  test("更新检查中标题区立即检查按钮显示加载动画和检查中文案", () => {
+    const html = renderToStaticMarkup(
+      createElement(SettingsView, {
+        settings,
+        draft,
+        serviceSnapshot: snapshot,
+        updateResult: null,
+        installResult: null,
+        error: null,
+        isBusy: true,
+        isCheckingUpdates: true,
+        initialSection: "update",
+        onDraftChange: vi.fn(),
+        onCheckUpdates: vi.fn(),
+        onInstallUpdates: vi.fn(),
+        onOpenDataDirectory: vi.fn(),
+        onOpenLogDirectory: vi.fn(),
+      }),
+    );
+
+    expect(html.match(/检查中/g) ?? []).toHaveLength(1);
+    expect(html.match(/button-spinner/g) ?? []).toHaveLength(1);
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain(">立即检查</button>");
   });
 
   test("上次检查时间格式化为可读本地格式", () => {

@@ -31,6 +31,7 @@ export interface SettingsStoreState {
   installResult: ComponentInstallResult | null;
   error: string | null;
   isBusy: boolean;
+  isCheckingUpdates: boolean;
 }
 
 export interface SettingsCommands {
@@ -60,6 +61,7 @@ const defaultState: SettingsStoreState = {
   installResult: null,
   error: null,
   isBusy: false,
+  isCheckingUpdates: false,
 };
 
 export function canEditServicePort(status: ServiceStatus): boolean {
@@ -238,7 +240,12 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
       void persistDraft(draft, version);
     },
     async checkUpdates() {
+      if (state.isCheckingUpdates) {
+        return;
+      }
+
       beginBusy();
+      emit({ isCheckingUpdates: true });
       try {
         const updateResult = await commands.checkForUpdates();
         endBusy({
@@ -251,9 +258,13 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
               }
             : state.settings,
           installResult: null,
+          isCheckingUpdates: false,
         });
       } catch (caught) {
-        endBusy({ error: toErrorMessage(caught) });
+        endBusy({
+          error: toErrorMessage(caught),
+          isCheckingUpdates: false,
+        });
       }
     },
     async installUpdates(restartAfterInstall) {

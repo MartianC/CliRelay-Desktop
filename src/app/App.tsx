@@ -123,6 +123,7 @@ function App() {
         installResult={settings.installResult}
         error={settings.error}
         isBusy={settings.isBusy}
+        isCheckingUpdates={settings.isCheckingUpdates}
         onDraftChange={settingsStore.setDraft}
         onCheckUpdates={settingsStore.checkUpdates}
         onInstallUpdates={settingsStore.installUpdates}

@@ -58,6 +58,28 @@ button.secondary:hover,
   background: #f7f9fc;
 }
 
+.check-updates-button {
+  min-width: 92px;
+}
+
+.button-spinner {
+  animation: button-spinner-rotate 0.8s linear infinite;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  border-right-color: transparent;
+  display: inline-block;
+  height: 0.9rem;
+  margin-right: 0.45rem;
+  vertical-align: -0.12rem;
+  width: 0.9rem;
+}
+
+@keyframes button-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 button.ghost,
 .button.ghost {
   background: transparent;
@@ -552,6 +574,11 @@ h2 {
   display: flex;
   gap: 16px;
   justify-content: space-between;
+}
+
+.settings-header-actions {
+  align-self: center;
+  justify-content: flex-end;
 }
 
 .settings-content-header h2 {

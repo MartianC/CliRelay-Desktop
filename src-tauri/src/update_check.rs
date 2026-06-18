@@ -1,13 +1,17 @@
 use chrono::{DateTime, Utc};
 use semver::Version;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::time::Duration;
 use url::Url;
 
 pub const LATEST_PREVIEW_URL: &str =
     "https://martianc.github.io/CliRelay-Desktop/latest-preview.json";
 pub const CLIRELAY_RELEASES_API: &str = "https://api.github.com/repos/kittors/CliRelay/releases";
 pub const CODEPROXY_RELEASES_API: &str = "https://api.github.com/repos/kittors/codeProxy/releases";
+pub const GITHUB_RELEASES_PER_PAGE: usize = 10;
+pub const UPDATE_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub const ALLOWED_RELEASE_HOST: &str = "github.com";
 pub const ALLOWED_RELEASE_PATH_PREFIX: &str = "/MartianC/CliRelay-Desktop/releases/";
@@ -435,20 +439,44 @@ pub fn fetch_latest_preview() -> Result<LatestPreview, UpdateCheckError> {
     })?;
     validate_url_path(&url, ALLOWED_PAGES_HOST, ALLOWED_PAGES_PATH)?;
 
-    ureq::get(LATEST_PREVIEW_URL)
-        .set("User-Agent", "CliRelay-Desktop")
-        .call()
-        .map_err(|error| UpdateCheckError::Network(error.to_string()))?
-        .into_json::<LatestPreview>()
-        .map_err(|error| UpdateCheckError::Network(error.to_string()))
+    fetch_json_with_timeout(LATEST_PREVIEW_URL, UPDATE_HTTP_TIMEOUT)
+}
+
+pub fn component_releases_api_url(component: UpstreamComponent) -> String {
+    let base_url = match component {
+        UpstreamComponent::CliRelay => CLIRELAY_RELEASES_API,
+        UpstreamComponent::CodeProxy => CODEPROXY_RELEASES_API,
+    };
+
+    format!("{base_url}?per_page={GITHUB_RELEASES_PER_PAGE}")
 }
 
 pub fn fetch_github_releases(url: &str) -> Result<Vec<GithubRelease>, UpdateCheckError> {
-    ureq::get(url)
+    fetch_github_releases_with_timeout(url, UPDATE_HTTP_TIMEOUT)
+}
+
+pub fn fetch_github_releases_with_timeout(
+    url: &str,
+    timeout: Duration,
+) -> Result<Vec<GithubRelease>, UpdateCheckError> {
+    fetch_json_with_timeout(url, timeout)
+}
+
+fn fetch_json_with_timeout<T: DeserializeOwned>(
+    url: &str,
+    timeout: Duration,
+) -> Result<T, UpdateCheckError> {
+    ureq::AgentBuilder::new()
+        .timeout_connect(timeout)
+        .timeout_read(timeout)
+        .timeout_write(timeout)
+        .timeout(timeout)
+        .build()
+        .get(url)
         .set("User-Agent", "CliRelay-Desktop")
         .call()
         .map_err(|error| UpdateCheckError::Network(error.to_string()))?
-        .into_json::<Vec<GithubRelease>>()
+        .into_json::<T>()
         .map_err(|error| UpdateCheckError::Network(error.to_string()))
 }
 

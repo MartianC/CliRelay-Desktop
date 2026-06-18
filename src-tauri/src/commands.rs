@@ -11,9 +11,9 @@ use crate::service::ownership::ProcessOwnership;
 use crate::service::state::ServiceStatus;
 use crate::settings::{load_or_create_settings, save_settings, DesktopSettings, SettingsError};
 use crate::update_check::{
-    build_update_check_result, fetch_github_releases, fetch_latest_preview,
-    select_component_release, ComponentUpdateCandidate, CurrentVersions, UpdateCheckResult,
-    UpstreamComponent, UpstreamInstallScope,
+    build_update_check_result, component_releases_api_url, fetch_github_releases,
+    fetch_latest_preview, select_component_release, ComponentUpdateCandidate, CurrentVersions,
+    LatestPreview, UpdateCheckResult, UpstreamComponent, UpstreamInstallScope,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 pub const SAFE_COMMAND_NAMES: [&str; 14] = [
@@ -123,7 +123,7 @@ impl From<tauri::Error> for CommandError {
     }
 }
 
-pub type SharedDesktopCommandState = Mutex<DesktopCommandState>;
+pub type SharedDesktopCommandState = Arc<Mutex<DesktopCommandState>>;
 
 pub struct DesktopCommandState {
     paths: crate::paths::DesktopPaths,
@@ -472,8 +472,18 @@ pub fn update_desktop_settings(
 }
 
 #[tauri::command]
-pub fn check_for_updates(
+pub async fn check_for_updates(
     state: tauri::State<'_, SharedDesktopCommandState>,
+) -> Result<UpdateCheckResult, CommandError> {
+    let state = state.inner().clone();
+
+    tauri::async_runtime::spawn_blocking(move || check_for_updates_blocking(&state))
+        .await
+        .map_err(|error| CommandError::Update(format!("更新检查后台任务失败: {error}")))?
+}
+
+fn check_for_updates_blocking(
+    state: &SharedDesktopCommandState,
 ) -> Result<UpdateCheckResult, CommandError> {
     let current = {
         let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
@@ -484,21 +494,28 @@ pub fn check_for_updates(
         state.paths.clone()
     };
 
-    let latest_preview = match fetch_latest_preview() {
+    let (latest_preview_result, clirelay_candidate_result, codeproxy_candidate_result) =
+        fetch_update_sources_concurrently(
+            || fetch_latest_preview().map_err(CommandError::from),
+            || fetch_component_candidate(UpstreamComponent::CliRelay),
+            || fetch_component_candidate(UpstreamComponent::CodeProxy),
+        );
+
+    let latest_preview = match latest_preview_result {
         Ok(preview) => Some(preview),
         Err(error) => {
             let _ = append_desktop_log_line(&paths, &format!("Desktop 更新检查失败: {error}"));
             None
         }
     };
-    let clirelay_candidate = match fetch_component_candidate(UpstreamComponent::CliRelay) {
+    let clirelay_candidate = match clirelay_candidate_result {
         Ok(candidate) => candidate,
         Err(error) => {
             let _ = append_desktop_log_line(&paths, &format!("CliRelay 更新检查失败: {error}"));
             None
         }
     };
-    let codeproxy_candidate = match fetch_component_candidate(UpstreamComponent::CodeProxy) {
+    let codeproxy_candidate = match codeproxy_candidate_result {
         Ok(candidate) => candidate,
         Err(error) => {
             let _ = append_desktop_log_line(&paths, &format!("codeProxy 更新检查失败: {error}"));
@@ -619,12 +636,46 @@ pub fn install_upstream_component_updates(
 fn fetch_component_candidate(
     component: UpstreamComponent,
 ) -> Result<Option<ComponentUpdateCandidate>, CommandError> {
-    let api_url = match component {
-        UpstreamComponent::CliRelay => crate::update_check::CLIRELAY_RELEASES_API,
-        UpstreamComponent::CodeProxy => crate::update_check::CODEPROXY_RELEASES_API,
-    };
-    let releases = fetch_github_releases(api_url)?;
+    let api_url = component_releases_api_url(component);
+    let releases = fetch_github_releases(&api_url)?;
     Ok(select_component_release(&releases, component)?)
+}
+
+fn fetch_update_sources_concurrently<FetchPreview, FetchClirelay, FetchCodeProxy>(
+    fetch_preview: FetchPreview,
+    fetch_clirelay: FetchClirelay,
+    fetch_codeproxy: FetchCodeProxy,
+) -> (
+    Result<LatestPreview, CommandError>,
+    Result<Option<ComponentUpdateCandidate>, CommandError>,
+    Result<Option<ComponentUpdateCandidate>, CommandError>,
+)
+where
+    FetchPreview: FnOnce() -> Result<LatestPreview, CommandError> + Send,
+    FetchClirelay: FnOnce() -> Result<Option<ComponentUpdateCandidate>, CommandError> + Send,
+    FetchCodeProxy: FnOnce() -> Result<Option<ComponentUpdateCandidate>, CommandError> + Send,
+{
+    std::thread::scope(|scope| {
+        let preview = scope.spawn(fetch_preview);
+        let clirelay = scope.spawn(fetch_clirelay);
+        let codeproxy = scope.spawn(fetch_codeproxy);
+
+        (
+            preview.join().unwrap_or_else(|_| {
+                Err(CommandError::Update("Desktop 更新检查线程失败".to_string()))
+            }),
+            clirelay.join().unwrap_or_else(|_| {
+                Err(CommandError::Update(
+                    "CliRelay 更新检查线程失败".to_string(),
+                ))
+            }),
+            codeproxy.join().unwrap_or_else(|_| {
+                Err(CommandError::Update(
+                    "codeProxy 更新检查线程失败".to_string(),
+                ))
+            }),
+        )
+    })
 }
 
 fn open_path(path: &Path) -> Result<(), CommandError> {
@@ -688,6 +739,43 @@ mod tests {
             ]
         );
         assert!(!SAFE_COMMAND_NAMES.contains(&"greet"));
+    }
+
+    #[test]
+    fn shared_command_state_can_be_moved_to_background_tasks() {
+        fn assert_background_task_state<T: Clone + Send + Sync + 'static>() {}
+
+        assert_background_task_state::<SharedDesktopCommandState>();
+    }
+
+    #[test]
+    fn update_source_fetches_run_concurrently() {
+        let started_at = std::time::Instant::now();
+        let delay = std::time::Duration::from_millis(150);
+
+        let (desktop, clirelay, codeproxy) = fetch_update_sources_concurrently(
+            || {
+                std::thread::sleep(delay);
+                Err(CommandError::Update("desktop unavailable".to_string()))
+            },
+            || {
+                std::thread::sleep(delay);
+                Ok(None)
+            },
+            || {
+                std::thread::sleep(delay);
+                Ok(None)
+            },
+        );
+
+        assert!(
+            started_at.elapsed() < std::time::Duration::from_millis(350),
+            "三个源应并发执行，实际耗时 {:?}",
+            started_at.elapsed()
+        );
+        assert!(matches!(desktop, Err(CommandError::Update(_))));
+        assert_eq!(clirelay, Ok(None));
+        assert_eq!(codeproxy, Ok(None));
     }
 
     #[test]

@@ -4,11 +4,16 @@ use clirelay_desktop_lib::component_update::{
 };
 use clirelay_desktop_lib::service::state::ServiceStatus;
 use clirelay_desktop_lib::update_check::{
-    build_update_check_result, is_newer_preview_version, select_component_release,
-    validate_desktop_download_url, validate_desktop_preview, ComponentUpdateCandidate,
-    CurrentVersions, GithubRelease, GithubReleaseAsset, UpdateSubject, UpstreamComponent,
-    UpstreamInstallScope, UpstreamUpdateAction,
+    build_update_check_result, component_releases_api_url, fetch_github_releases_with_timeout,
+    is_newer_preview_version, select_component_release, validate_desktop_download_url,
+    validate_desktop_preview, ComponentUpdateCandidate, CurrentVersions, GithubRelease,
+    GithubReleaseAsset, UpdateSubject, UpstreamComponent, UpstreamInstallScope,
+    UpstreamUpdateAction, CLIRELAY_RELEASES_API, CODEPROXY_RELEASES_API, GITHUB_RELEASES_PER_PAGE,
 };
+use std::io::Write;
+use std::net::TcpListener;
+use std::thread;
+use std::time::{Duration, Instant};
 use url::Url;
 
 #[test]
@@ -113,6 +118,37 @@ fn release_selection_uses_latest_published_release_not_largest_semver() {
 
     assert_eq!(candidate.version, "v0.4.1");
     assert_eq!(candidate.asset_sha256, "5".repeat(64));
+}
+
+#[test]
+fn component_release_api_urls_limit_response_page_size() {
+    let clirelay_url = component_releases_api_url(UpstreamComponent::CliRelay);
+    let codeproxy_url = component_releases_api_url(UpstreamComponent::CodeProxy);
+
+    assert_eq!(
+        clirelay_url,
+        format!("{CLIRELAY_RELEASES_API}?per_page={GITHUB_RELEASES_PER_PAGE}")
+    );
+    assert_eq!(
+        codeproxy_url,
+        format!("{CODEPROXY_RELEASES_API}?per_page={GITHUB_RELEASES_PER_PAGE}")
+    );
+}
+
+#[test]
+fn github_release_fetch_can_fail_fast_with_a_short_read_timeout() {
+    let url = delayed_json_server(Duration::from_millis(350), "[]");
+    let started_at = Instant::now();
+
+    let error = fetch_github_releases_with_timeout(&url, Duration::from_millis(80))
+        .expect_err("慢响应应被短超时中止");
+
+    assert!(
+        started_at.elapsed() < Duration::from_millis(300),
+        "短超时没有及时生效，实际耗时 {:?}",
+        started_at.elapsed()
+    );
+    assert!(error.to_string().contains("timed out"));
 }
 
 #[test]
@@ -305,4 +341,24 @@ fn component_candidate(subject: UpdateSubject, version: &str) -> ComponentUpdate
         asset_url: Url::parse("https://github.com/kittors/CliRelay/releases/download/v0.4.1/CliRelay_0.4.1_darwin_arm64.tar.gz").unwrap(),
         asset_sha256: "b".repeat(64),
     }
+}
+
+fn delayed_json_server(delay: Duration, body: &'static str) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("绑定测试 HTTP server 失败");
+    let address = listener
+        .local_addr()
+        .expect("读取测试 HTTP server 地址失败");
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("接受测试 HTTP 请求失败");
+        thread::sleep(delay);
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(response.as_bytes());
+    });
+
+    format!("http://{address}/releases")
 }
