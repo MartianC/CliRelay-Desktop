@@ -3,6 +3,7 @@ pub mod commands;
 pub mod component_update;
 pub mod paths;
 pub mod platform;
+pub mod runtime_resources;
 pub mod service;
 pub mod settings;
 pub mod tray;
