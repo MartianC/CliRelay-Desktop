@@ -3,7 +3,7 @@ use clirelay_desktop_lib::service::health::{probe_port, PortProbe};
 use clirelay_desktop_lib::service::manager::{
     ManagerError, ManagerTimeouts, ServiceManager, ServiceManagerConfig,
 };
-use clirelay_desktop_lib::service::ownership::ProcessOwnership;
+use clirelay_desktop_lib::service::ownership::{read_runtime_state, ProcessOwnership};
 use clirelay_desktop_lib::service::state::ServiceStatus;
 use clirelay_desktop_lib::settings::DesktopSettings;
 use std::fs;
@@ -90,6 +90,59 @@ fn connect_external_marks_clirelay_like_port_without_taking_ownership() {
     ));
 }
 
+#[test]
+fn start_service_rebuilds_missing_runtime_sidecar_and_launches_runtime_executable() {
+    let fixture = ManagerFixture::new("runtime-sidecar-rebuild");
+    let bundled_sidecar = compile_mock_sidecar(fixture.path());
+    let port = free_local_port();
+    let mut manager = ServiceManager::new(fixture.manager_config(&bundled_sidecar, port, "run", 0));
+
+    assert!(!fixture.paths.runtime_sidecar_executable.exists());
+
+    let snapshot = manager.start_service().expect("服务应启动成功");
+    let runtime_state = read_runtime_state(fixture.paths.runtime_state_file.clone())
+        .expect("读取 runtime state 失败")
+        .expect("runtime state 应存在");
+
+    assert_eq!(snapshot.status, ServiceStatus::Running);
+    assert!(fixture.paths.runtime_sidecar_executable.is_file());
+    assert_eq!(
+        runtime_state.executable_path,
+        fixture
+            .paths
+            .runtime_sidecar_executable
+            .canonicalize()
+            .expect("规范化 runtime sidecar 路径失败")
+    );
+    assert_ne!(
+        runtime_state.executable_path,
+        bundled_sidecar
+            .canonicalize()
+            .expect("规范化 bundle sidecar 路径失败")
+    );
+
+    manager.stop_service().expect("清理测试 sidecar 失败");
+}
+
+#[test]
+fn start_service_rebuilds_missing_panel_and_config_before_launch() {
+    let fixture = ManagerFixture::new("runtime-panel-config-rebuild");
+    let bundled_sidecar = compile_mock_sidecar(fixture.path());
+    let port = free_local_port();
+    let mut manager = ServiceManager::new(fixture.manager_config(&bundled_sidecar, port, "run", 0));
+
+    assert!(!fixture.paths.config_file.exists());
+    assert!(!fixture.paths.panel_dir.join("manage.html").exists());
+
+    let snapshot = manager.start_service().expect("服务应启动成功");
+
+    assert_eq!(snapshot.status, ServiceStatus::Running);
+    assert!(fixture.paths.config_file.is_file());
+    assert!(fixture.paths.panel_dir.join("manage.html").is_file());
+
+    manager.stop_service().expect("清理测试 sidecar 失败");
+}
+
 struct ManagerFixture {
     root: TempDir,
     paths: DesktopPaths,
@@ -148,6 +201,7 @@ impl ManagerFixture {
             DesktopSettings::default().with_port(port).unwrap(),
             self.config_example.clone(),
             self.bundled_panel.clone(),
+            self.paths.runtime_sidecar_executable.clone(),
             sidecar.to_path_buf(),
             "0.1.0-test",
         );

@@ -1,7 +1,7 @@
 use crate::component_update::{
     apply_prepared_clirelay_update, apply_prepared_codeproxy_update, current_component_versions,
     current_sidecar_sha256, prepare_clirelay_update, prepare_codeproxy_update,
-    runtime_sidecar_if_valid, ComponentUpdateError, PreparedComponentUpdate,
+    ComponentUpdateError, PreparedComponentUpdate,
 };
 use crate::service::logs::append_desktop_log_line;
 use crate::service::manager::{
@@ -184,7 +184,6 @@ pub struct DesktopCommandState {
     paths: crate::paths::DesktopPaths,
     settings: DesktopSettings,
     manager: ServiceManager,
-    bundled_sidecar_executable: PathBuf,
 }
 
 impl DesktopCommandState {
@@ -192,13 +191,11 @@ impl DesktopCommandState {
         paths: crate::paths::DesktopPaths,
         settings: DesktopSettings,
         manager: ServiceManager,
-        bundled_sidecar_executable: PathBuf,
     ) -> Self {
         Self {
             paths,
             settings,
             manager,
-            bundled_sidecar_executable,
         }
     }
 
@@ -210,8 +207,7 @@ impl DesktopCommandState {
         let paths = crate::paths::DesktopPaths::from_home_dir(home_dir);
         let settings = load_or_create_settings(&paths)?;
         let resources = ResourcePaths::resolve(app)?;
-        let sidecar_executable = runtime_sidecar_if_valid(&paths)
-            .unwrap_or_else(|| resources.sidecar_executable.clone());
+        let sidecar_executable = paths.runtime_sidecar_executable.clone();
         let (clirelay_version, code_proxy_version) = current_component_versions(&paths);
         let sidecar_sha256 = current_sidecar_sha256(&paths);
         let desktop_version = app.package_info().version.to_string();
@@ -221,6 +217,7 @@ impl DesktopCommandState {
             resources.config_example,
             resources.panel_dir,
             sidecar_executable,
+            resources.sidecar_executable.clone(),
             desktop_version,
         );
         let mut manager_config = manager_config;
@@ -229,12 +226,7 @@ impl DesktopCommandState {
         manager_config.sidecar_sha256 = sidecar_sha256;
         let manager = ServiceManager::new(manager_config);
 
-        Ok(Self::new(
-            paths,
-            settings,
-            manager,
-            resources.sidecar_executable,
-        ))
+        Ok(Self::new(paths, settings, manager))
     }
 
     pub fn paths(&self) -> &crate::paths::DesktopPaths {
@@ -267,8 +259,7 @@ impl DesktopCommandState {
     }
 
     pub fn refresh_runtime_components(&mut self) {
-        let sidecar_executable = runtime_sidecar_if_valid(&self.paths)
-            .unwrap_or_else(|| self.bundled_sidecar_executable.clone());
+        let sidecar_executable = self.paths.runtime_sidecar_executable.clone();
         let (clirelay_version, code_proxy_version) = current_component_versions(&self.paths);
         let sidecar_sha256 = current_sidecar_sha256(&self.paths);
         self.manager.refresh_runtime_components(
@@ -1055,6 +1046,7 @@ mod tests {
             settings.clone(),
             PathBuf::from("config.example.yaml"),
             PathBuf::from("panel"),
+            paths.runtime_sidecar_executable.clone(),
             PathBuf::from("cli-proxy-api"),
             "9.9.9-preview.7",
         );
@@ -1063,10 +1055,45 @@ mod tests {
             paths,
             settings,
             ServiceManager::new(manager_config),
-            PathBuf::from("cli-proxy-api"),
         );
 
         assert_eq!(state.current_versions().desktop, "9.9.9-preview.7");
+    }
+
+    #[test]
+    fn refresh_runtime_components_keeps_runtime_sidecar_path() {
+        let paths = crate::paths::DesktopPaths::for_test(
+            std::env::temp_dir().join(format!(
+                "clirelay-desktop-refresh-runtime-app-data-{}",
+                std::process::id()
+            )),
+            std::env::temp_dir().join(format!(
+                "clirelay-desktop-refresh-runtime-logs-{}",
+                std::process::id()
+            )),
+        );
+        let settings = DesktopSettings::default();
+        let manager_config = ServiceManagerConfig::new(
+            paths.clone(),
+            settings.clone(),
+            PathBuf::from("config.example.yaml"),
+            PathBuf::from("panel"),
+            paths.runtime_sidecar_executable.clone(),
+            PathBuf::from("bundle-sidecar"),
+            "9.9.9-preview.7",
+        );
+        let mut state = DesktopCommandState::new(
+            paths.clone(),
+            settings,
+            ServiceManager::new(manager_config),
+        );
+
+        state.refresh_runtime_components();
+
+        assert_eq!(
+            state.manager.sidecar_executable(),
+            paths.runtime_sidecar_executable.as_path()
+        );
     }
 
     fn service_snapshot(port: u16) -> ServiceSnapshot {

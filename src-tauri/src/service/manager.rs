@@ -7,10 +7,7 @@ use crate::service::health::{
 use crate::service::logs::append_clirelay_output_line;
 use crate::service::ownership::{write_runtime_state, ProcessOwnership, RuntimeState};
 use crate::service::state::{transition, ServiceEvent, ServiceStatus, StateTransitionError};
-use crate::settings::{
-    ensure_desktop_dirs, ensure_panel_resources, ensure_runtime_config, DesktopSettings,
-    SettingsError,
-};
+use crate::settings::{DesktopSettings, SettingsError};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use std::fmt;
@@ -45,6 +42,7 @@ pub struct ServiceManagerConfig {
     pub bundled_config_example: PathBuf,
     pub bundled_panel_dir: PathBuf,
     pub sidecar_executable: PathBuf,
+    pub bundled_sidecar_executable: PathBuf,
     pub host: String,
     pub desktop_version: String,
     pub clirelay_version: String,
@@ -61,6 +59,7 @@ impl ServiceManagerConfig {
         bundled_config_example: PathBuf,
         bundled_panel_dir: PathBuf,
         sidecar_executable: PathBuf,
+        bundled_sidecar_executable: PathBuf,
         desktop_version: impl Into<String>,
     ) -> Self {
         Self {
@@ -69,6 +68,7 @@ impl ServiceManagerConfig {
             bundled_config_example,
             bundled_panel_dir,
             sidecar_executable,
+            bundled_sidecar_executable,
             host: "127.0.0.1".to_string(),
             desktop_version: desktop_version.into(),
             clirelay_version: "unknown".to_string(),
@@ -112,6 +112,7 @@ pub enum ManagerError {
     Timeout(&'static str),
     Io(io::Error),
     Settings(SettingsError),
+    RuntimeResources(crate::runtime_resources::RuntimeResourceError),
     State(StateTransitionError),
 }
 
@@ -131,6 +132,7 @@ impl fmt::Display for ManagerError {
             Self::Timeout(stage) => write!(formatter, "等待 {stage} 超时"),
             Self::Io(error) => write!(formatter, "{error}"),
             Self::Settings(error) => write!(formatter, "{error}"),
+            Self::RuntimeResources(error) => write!(formatter, "{error}"),
             Self::State(error) => write!(
                 formatter,
                 "非法状态转换: {:?} + {:?}",
@@ -151,6 +153,12 @@ impl From<io::Error> for ManagerError {
 impl From<SettingsError> for ManagerError {
     fn from(error: SettingsError) -> Self {
         Self::Settings(error)
+    }
+}
+
+impl From<crate::runtime_resources::RuntimeResourceError> for ManagerError {
+    fn from(error: crate::runtime_resources::RuntimeResourceError) -> Self {
+        Self::RuntimeResources(error)
     }
 }
 
@@ -216,6 +224,11 @@ impl ServiceManager {
         self.ownership.clone()
     }
 
+    #[cfg(test)]
+    pub fn sidecar_executable(&self) -> &std::path::Path {
+        &self.config.sidecar_executable
+    }
+
     pub fn desktop_version(&self) -> &str {
         &self.config.desktop_version
     }
@@ -248,7 +261,7 @@ impl ServiceManager {
         self.last_exit_code = None;
 
         if let Err(error) = self.prepare_runtime() {
-            return Err(self.fail_start(error.into(), ServiceEvent::Timeout));
+            return Err(self.fail_start(error, ServiceEvent::Timeout));
         }
 
         match probe_port(&self.config.host, self.config.settings.port) {
@@ -363,14 +376,16 @@ impl ServiceManager {
         }
     }
 
-    fn prepare_runtime(&self) -> Result<(), SettingsError> {
-        ensure_desktop_dirs(&self.config.paths)?;
-        ensure_runtime_config(
+    fn prepare_runtime(&self) -> Result<(), ManagerError> {
+        crate::runtime_resources::ensure_runtime_resources(
             &self.config.paths,
-            &self.config.bundled_config_example,
             &self.config.settings,
+            &crate::runtime_resources::RuntimeResourceSources {
+                config_example: self.config.bundled_config_example.clone(),
+                panel_dir: self.config.bundled_panel_dir.clone(),
+                sidecar_executable: self.config.bundled_sidecar_executable.clone(),
+            },
         )?;
-        ensure_panel_resources(&self.config.paths, &self.config.bundled_panel_dir)?;
 
         Ok(())
     }
