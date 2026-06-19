@@ -143,6 +143,23 @@ fn start_service_rebuilds_missing_panel_and_config_before_launch() {
     manager.stop_service().expect("清理测试 sidecar 失败");
 }
 
+#[test]
+fn start_service_points_sidecar_management_panel_to_runtime_panel() {
+    let fixture = ManagerFixture::new("management-panel-dir-env");
+    let bundled_sidecar = compile_mock_sidecar(fixture.path());
+    let port = free_local_port();
+    let mut manager = ServiceManager::new(fixture.manager_config(&bundled_sidecar, port, "run", 0));
+
+    let snapshot = manager.start_service().expect("服务应启动成功");
+    let panel_dir_env = fs::read_to_string(fixture.paths.runtime_dir.join("management-panel-dir"))
+        .expect("mock sidecar 应记录 MANAGEMENT_PANEL_DIR");
+
+    assert_eq!(snapshot.status, ServiceStatus::Running);
+    assert_eq!(panel_dir_env, fixture.paths.panel_dir.to_string_lossy());
+
+    manager.stop_service().expect("清理测试 sidecar 失败");
+}
+
 struct ManagerFixture {
     root: TempDir,
     paths: DesktopPaths,
@@ -344,6 +361,9 @@ fn main() {
 
     let cwd = env::current_dir().expect("读取 cwd 失败");
     fs::write(cwd.join("cwd-ok"), "ok").expect("写入 cwd 标记失败");
+    if let Ok(panel_dir) = env::var("MANAGEMENT_PANEL_DIR") {
+        fs::write(cwd.join("management-panel-dir"), panel_dir).expect("写入面板目录环境变量标记失败");
+    }
     let port = read_port(&cwd.join("config.yaml"));
     let listener = TcpListener::bind(("127.0.0.1", port)).expect("绑定 mock sidecar 端口失败");
 

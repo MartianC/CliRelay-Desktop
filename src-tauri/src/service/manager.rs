@@ -401,6 +401,11 @@ impl ServiceManager {
             command.env(key, value);
         }
 
+        // 固定到 Desktop 准备好的多文件面板，避免 sidecar fallback 覆盖 /manage。
+        command
+            .env_remove("MANAGEMENT_STATIC_PATH")
+            .env("MANAGEMENT_PANEL_DIR", &self.config.paths.panel_dir);
+
         let mut child = command.spawn()?;
         let pid = child.id();
         let started_at = macos::process_started_at(pid)
