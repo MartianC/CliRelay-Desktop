@@ -89,10 +89,21 @@ export interface UpdateCheckResult {
   upstream: UpstreamUpdateBlock;
 }
 
-export interface ComponentInstallResult {
-  status: "Success" | "PartialSuccess" | "NoUpdates";
+export type ComponentPreparationStatus = "Idle" | "Preparing" | "Ready" | "Failed";
+
+export interface ComponentUpdatePreparationSnapshot {
+  status: ComponentPreparationStatus;
+  installScope: UpstreamInstallScope;
   message: string;
-  installedScope: UpstreamInstallScope;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+}
+
+export interface ComponentApplyResult {
+  status: "Applied" | "NoPreparedUpdate";
+  message: string;
+  appliedScope: UpstreamInstallScope;
 }
 
 export interface CommandErrorPayload {

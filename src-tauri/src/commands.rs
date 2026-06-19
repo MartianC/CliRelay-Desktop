@@ -1,7 +1,7 @@
 use crate::component_update::{
-    current_component_versions, current_sidecar_sha256, install_clirelay_update,
-    install_codeproxy_update, runtime_sidecar_if_valid, ComponentInstallResult,
-    ComponentUpdateError, InstallStatus,
+    apply_prepared_clirelay_update, apply_prepared_codeproxy_update, current_component_versions,
+    current_sidecar_sha256, prepare_clirelay_update, prepare_codeproxy_update,
+    runtime_sidecar_if_valid, ComponentUpdateError, PreparedComponentUpdate,
 };
 use crate::service::logs::append_desktop_log_line;
 use crate::service::manager::{
@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
-pub const SAFE_COMMAND_NAMES: [&str; 14] = [
+pub const SAFE_COMMAND_NAMES: [&str; 16] = [
     "get_service_snapshot",
     "start_service",
     "stop_service",
@@ -38,7 +38,9 @@ pub const SAFE_COMMAND_NAMES: [&str; 14] = [
     "get_desktop_settings",
     "update_desktop_settings",
     "check_for_updates",
-    "install_upstream_component_updates",
+    "get_component_update_preparation",
+    "prepare_upstream_component_updates",
+    "apply_prepared_component_updates",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -124,6 +126,59 @@ impl From<tauri::Error> for CommandError {
 }
 
 pub type SharedDesktopCommandState = Arc<Mutex<DesktopCommandState>>;
+
+pub type SharedComponentPreparationRuntime = Arc<Mutex<ComponentPreparationRuntime>>;
+
+#[derive(Debug, Default)]
+pub struct ComponentPreparationRuntime {
+    snapshot: ComponentUpdatePreparationSnapshot,
+    prepared: Option<PreparedComponentUpdate>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ComponentUpdatePreparationSnapshot {
+    pub status: ComponentPreparationStatus,
+    pub install_scope: UpstreamInstallScope,
+    pub message: String,
+    pub started_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub finished_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub error: Option<String>,
+}
+
+impl Default for ComponentUpdatePreparationSnapshot {
+    fn default() -> Self {
+        Self {
+            status: ComponentPreparationStatus::Idle,
+            install_scope: UpstreamInstallScope::None,
+            message: String::new(),
+            started_at: None,
+            finished_at: None,
+            error: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub enum ComponentPreparationStatus {
+    #[default]
+    Idle,
+    Preparing,
+    Ready,
+    Failed,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ComponentApplyResult {
+    pub status: ComponentApplyStatus,
+    pub message: String,
+    pub applied_scope: UpstreamInstallScope,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub enum ComponentApplyStatus {
+    Applied,
+    NoPreparedUpdate,
+}
 
 pub struct DesktopCommandState {
     paths: crate::paths::DesktopPaths,
@@ -542,18 +597,95 @@ fn check_for_updates_blocking(
 }
 
 #[tauri::command]
-pub fn install_upstream_component_updates(
+pub fn get_component_update_preparation(
+    preparation: tauri::State<'_, SharedComponentPreparationRuntime>,
+) -> Result<ComponentUpdatePreparationSnapshot, CommandError> {
+    let preparation = preparation
+        .lock()
+        .map_err(|_| CommandError::StateLockPoisoned)?;
+    Ok(preparation.snapshot.clone())
+}
+
+#[tauri::command]
+pub fn prepare_upstream_component_updates(
     state: tauri::State<'_, SharedDesktopCommandState>,
+    preparation: tauri::State<'_, SharedComponentPreparationRuntime>,
     install_scope: UpstreamInstallScope,
-    restart_after_install: bool,
-) -> Result<ComponentInstallResult, CommandError> {
+) -> Result<ComponentUpdatePreparationSnapshot, CommandError> {
     if install_scope == UpstreamInstallScope::None {
-        return Ok(ComponentInstallResult {
-            status: InstallStatus::NoUpdates,
-            message: "没有可安装的上游组件更新".to_string(),
-            installed_scope: UpstreamInstallScope::None,
-        });
+        return Err(CommandError::ComponentUpdate(
+            "没有可准备的上游组件更新".to_string(),
+        ));
     }
+
+    let started_at = chrono::Utc::now();
+    let initial_snapshot = {
+        let mut preparation = preparation
+            .lock()
+            .map_err(|_| CommandError::StateLockPoisoned)?;
+        if preparation.snapshot.status == ComponentPreparationStatus::Preparing {
+            return Ok(preparation.snapshot.clone());
+        }
+
+        preparation.prepared = None;
+        preparation.snapshot = ComponentUpdatePreparationSnapshot {
+            status: ComponentPreparationStatus::Preparing,
+            install_scope,
+            message: "正在后台准备组件更新".to_string(),
+            started_at: Some(started_at),
+            finished_at: None,
+            error: None,
+        };
+        preparation.snapshot.clone()
+    };
+
+    let state = state.inner().clone();
+    let preparation = preparation.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = prepare_upstream_component_updates_blocking(&state, install_scope);
+        let mut preparation = match preparation.lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        let finished_at = chrono::Utc::now();
+        match result {
+            Ok(prepared) => {
+                let prepared_scope = prepared.install_scope;
+                preparation.prepared = Some(prepared);
+                preparation.snapshot = ComponentUpdatePreparationSnapshot {
+                    status: ComponentPreparationStatus::Ready,
+                    install_scope: prepared_scope,
+                    message: "组件更新已准备好，点击重启完成替换".to_string(),
+                    started_at: Some(started_at),
+                    finished_at: Some(finished_at),
+                    error: None,
+                };
+            }
+            Err(error) => {
+                preparation.prepared = None;
+                preparation.snapshot = ComponentUpdatePreparationSnapshot {
+                    status: ComponentPreparationStatus::Failed,
+                    install_scope,
+                    message: "组件更新准备失败".to_string(),
+                    started_at: Some(started_at),
+                    finished_at: Some(finished_at),
+                    error: Some(error.to_string()),
+                };
+            }
+        }
+    });
+
+    Ok(initial_snapshot)
+}
+
+fn prepare_upstream_component_updates_blocking(
+    state: &SharedDesktopCommandState,
+    install_scope: UpstreamInstallScope,
+) -> Result<PreparedComponentUpdate, CommandError> {
+    let paths = {
+        let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+        state.paths.clone()
+    };
 
     let clirelay_candidate = if matches!(
         install_scope,
@@ -572,12 +704,87 @@ pub fn install_upstream_component_updates(
         None
     };
 
+    let clirelay = match clirelay_candidate.as_ref() {
+        Some(candidate) => Some(prepare_clirelay_update(&paths, candidate)?),
+        None => None,
+    };
+    let code_proxy = match codeproxy_candidate.as_ref() {
+        Some(candidate) => Some(prepare_codeproxy_update(&paths, candidate)?),
+        None => None,
+    };
+
+    if clirelay.is_none() && code_proxy.is_none() {
+        return Err(CommandError::ComponentUpdate(
+            "没有可准备的上游组件更新".to_string(),
+        ));
+    }
+
+    Ok(PreparedComponentUpdate {
+        install_scope,
+        clirelay,
+        code_proxy,
+        prepared_at: chrono::Utc::now(),
+    })
+}
+
+#[tauri::command]
+pub fn apply_prepared_component_updates(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SharedDesktopCommandState>,
+    preparation: tauri::State<'_, SharedComponentPreparationRuntime>,
+) -> Result<ComponentApplyResult, CommandError> {
+    let prepared = {
+        let mut preparation = preparation
+            .lock()
+            .map_err(|_| CommandError::StateLockPoisoned)?;
+        preparation.prepared.take()
+    };
+
+    let Some(prepared) = prepared else {
+        return Ok(ComponentApplyResult {
+            status: ComponentApplyStatus::NoPreparedUpdate,
+            message: "没有已准备好的组件更新".to_string(),
+            applied_scope: UpstreamInstallScope::None,
+        });
+    };
+
+    let applied_scope = match apply_prepared_component_updates_blocking(&state, &prepared) {
+        Ok(scope) => scope,
+        Err(error) => {
+            if let Ok(mut preparation) = preparation.lock() {
+                preparation.prepared = Some(prepared);
+            }
+            return Err(error);
+        }
+    };
+
+    {
+        let mut preparation = preparation
+            .lock()
+            .map_err(|_| CommandError::StateLockPoisoned)?;
+        preparation.snapshot = ComponentUpdatePreparationSnapshot::default();
+        preparation.prepared = None;
+    }
+
+    app.request_restart();
+
+    Ok(ComponentApplyResult {
+        status: ComponentApplyStatus::Applied,
+        message: "组件更新已应用，正在重启 Desktop".to_string(),
+        applied_scope,
+    })
+}
+
+fn apply_prepared_component_updates_blocking(
+    state: &SharedDesktopCommandState,
+    prepared: &PreparedComponentUpdate,
+) -> Result<UpstreamInstallScope, CommandError> {
     let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
     let mut installed_clirelay = false;
     let mut installed_codeproxy = false;
-    let mut stopped_for_install = false;
+    let mut stopped_for_apply = false;
 
-    if let Some(candidate) = clirelay_candidate.as_ref() {
+    if let Some(artifact) = prepared.clirelay.as_ref() {
         let status = state.manager.status();
         match status {
             ServiceStatus::Running | ServiceStatus::Unhealthy => {
@@ -586,13 +793,8 @@ pub fn install_upstream_component_updates(
                         "只允许更新 Desktop 自管 CliRelay 服务".to_string(),
                     ));
                 }
-                if !restart_after_install {
-                    return Err(CommandError::ComponentUpdate(
-                        "更新运行中的 CliRelay 需要确认停止并重启服务".to_string(),
-                    ));
-                }
                 state.manager.stop_service()?;
-                stopped_for_install = true;
+                stopped_for_apply = true;
             }
             ServiceStatus::External | ServiceStatus::Starting | ServiceStatus::Stopping => {
                 return Err(ComponentUpdateError::InvalidServiceStatus(status).into());
@@ -600,36 +802,29 @@ pub fn install_upstream_component_updates(
             ServiceStatus::Stopped | ServiceStatus::Error => {}
         }
 
-        install_clirelay_update(&state.paths, candidate, state.manager.status())?;
+        apply_prepared_clirelay_update(&state.paths, artifact, state.manager.status())?;
         installed_clirelay = true;
         state.refresh_runtime_components();
     }
 
-    if let Some(candidate) = codeproxy_candidate.as_ref() {
-        install_codeproxy_update(&state.paths, candidate)?;
+    if let Some(artifact) = prepared.code_proxy.as_ref() {
+        apply_prepared_codeproxy_update(&state.paths, artifact)?;
         installed_codeproxy = true;
         state.refresh_runtime_components();
     }
 
-    if stopped_for_install && restart_after_install {
-        state.manager.start_service()?;
+    if stopped_for_apply {
+        let _ = append_desktop_log_line(
+            &state.paths,
+            "组件更新已停止 CliRelay，Desktop 重启后由启动策略恢复服务",
+        );
     }
 
-    let installed_scope = match (installed_clirelay, installed_codeproxy) {
+    Ok(match (installed_clirelay, installed_codeproxy) {
         (true, true) => UpstreamInstallScope::Both,
         (true, false) => UpstreamInstallScope::CliRelay,
         (false, true) => UpstreamInstallScope::CodeProxy,
         (false, false) => UpstreamInstallScope::None,
-    };
-
-    Ok(ComponentInstallResult {
-        status: if installed_scope == install_scope {
-            InstallStatus::Success
-        } else {
-            InstallStatus::PartialSuccess
-        },
-        message: "已更新上游组件".to_string(),
-        installed_scope,
     })
 }
 
@@ -735,7 +930,9 @@ mod tests {
                 "get_desktop_settings",
                 "update_desktop_settings",
                 "check_for_updates",
-                "install_upstream_component_updates",
+                "get_component_update_preparation",
+                "prepare_upstream_component_updates",
+                "apply_prepared_component_updates",
             ]
         );
         assert!(!SAFE_COMMAND_NAMES.contains(&"greet"));
@@ -746,6 +943,31 @@ mod tests {
         fn assert_background_task_state<T: Clone + Send + Sync + 'static>() {}
 
         assert_background_task_state::<SharedDesktopCommandState>();
+    }
+
+    #[test]
+    fn shared_preparation_runtime_can_be_moved_to_background_tasks() {
+        fn assert_background_task_state<T: Clone + Send + Sync + 'static>() {}
+
+        assert_background_task_state::<SharedComponentPreparationRuntime>();
+    }
+
+    #[test]
+    fn preparation_snapshot_serializes_with_bridge_field_names() {
+        let snapshot = ComponentUpdatePreparationSnapshot {
+            status: ComponentPreparationStatus::Ready,
+            install_scope: UpstreamInstallScope::Both,
+            message: "组件更新已准备好，点击重启完成替换".to_string(),
+            started_at: None,
+            finished_at: None,
+            error: None,
+        };
+
+        let value = serde_json::to_value(snapshot).expect("准备快照应可序列化");
+
+        assert_eq!(value["status"], "Ready");
+        assert_eq!(value["install_scope"], "Both");
+        assert!(value.get("installScope").is_none());
     }
 
     #[test]

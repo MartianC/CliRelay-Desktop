@@ -29,3 +29,4 @@ ureq = { version = "2", features = ["json"] }
 tar = "0.4"
 flate2 = "1"
 zip = "2"
+tauri-plugin-dialog = "2"

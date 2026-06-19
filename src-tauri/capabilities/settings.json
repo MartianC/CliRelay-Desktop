@@ -8,6 +8,7 @@
     "core:event:default",
     "core:window:default",
     "opener:allow-open-url",
-    "opener:allow-default-urls"
+    "opener:allow-default-urls",
+    "dialog:allow-message"
   ]
 }

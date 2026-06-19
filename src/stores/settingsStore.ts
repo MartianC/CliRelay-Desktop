@@ -1,13 +1,17 @@
 import { useSyncExternalStore } from "react";
 
 import {
+  applyPreparedComponentUpdates,
   checkForUpdates,
+  confirmPreparedComponentUpdateRestart,
   getDesktopSettings,
-  installUpstreamComponentUpdates,
+  getComponentUpdatePreparation,
+  prepareUpstreamComponentUpdates,
   updateDesktopSettings,
 } from "../bridge/commands";
 import type {
-  ComponentInstallResult,
+  ComponentApplyResult,
+  ComponentUpdatePreparationSnapshot,
   DesktopSettings,
   DesktopSettingsPatch,
   ServiceStatus,
@@ -28,17 +32,27 @@ export interface SettingsStoreState {
   settings: DesktopSettings | null;
   draft: SettingsDraft | null;
   updateResult: UpdateCheckResult | null;
-  installResult: ComponentInstallResult | null;
+  installResult: ComponentApplyResult | null;
+  componentPreparation: ComponentUpdatePreparationSnapshot | null;
   error: string | null;
   isBusy: boolean;
   isCheckingUpdates: boolean;
+  isPreparingUpdates: boolean;
+  isApplyingPreparedUpdate: boolean;
+}
+
+export interface ComponentPreparedUpdateApplyOptions {
+  serviceStatus: ServiceStatus;
 }
 
 export interface SettingsCommands {
   getDesktopSettings: typeof getDesktopSettings;
   updateDesktopSettings: typeof updateDesktopSettings;
   checkForUpdates: typeof checkForUpdates;
-  installUpstreamComponentUpdates: typeof installUpstreamComponentUpdates;
+  getComponentUpdatePreparation: typeof getComponentUpdatePreparation;
+  prepareUpstreamComponentUpdates: typeof prepareUpstreamComponentUpdates;
+  applyPreparedComponentUpdates: typeof applyPreparedComponentUpdates;
+  confirmPreparedComponentUpdateRestart: typeof confirmPreparedComponentUpdateRestart;
 }
 
 export interface SettingsStore {
@@ -47,7 +61,9 @@ export interface SettingsStore {
   load(): Promise<void>;
   setDraft(patch: Partial<SettingsDraft>): void;
   checkUpdates(): Promise<void>;
-  installUpdates(restartAfterInstall: boolean): Promise<void>;
+  prepareUpdates(): Promise<void>;
+  refreshComponentPreparation(): Promise<void>;
+  applyPreparedUpdate(options: ComponentPreparedUpdateApplyOptions): Promise<void>;
 }
 
 export type PortValidationResult =
@@ -59,9 +75,12 @@ const defaultState: SettingsStoreState = {
   draft: null,
   updateResult: null,
   installResult: null,
+  componentPreparation: null,
   error: null,
   isBusy: false,
   isCheckingUpdates: false,
+  isPreparingUpdates: false,
+  isApplyingPreparedUpdate: false,
 };
 
 export function canEditServicePort(status: ServiceStatus): boolean {
@@ -216,6 +235,7 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
       beginBusy();
       try {
         const settings = await commands.getDesktopSettings();
+        const componentPreparation = await commands.getComponentUpdatePreparation();
         draftVersion += 1;
         appliedSaveVersion = draftVersion;
         endBusy({
@@ -223,6 +243,9 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
           draft: createPortDraft(settings),
           updateResult: settings.lastUpdateCheckResult,
           installResult: null,
+          componentPreparation,
+          isPreparingUpdates: componentPreparation.status === "Preparing",
+          isApplyingPreparedUpdate: false,
         });
       } catch (caught) {
         endBusy({ error: toErrorMessage(caught) });
@@ -258,6 +281,7 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
               }
             : state.settings,
           installResult: null,
+          componentPreparation: null,
           isCheckingUpdates: false,
         });
       } catch (caught) {
@@ -267,23 +291,76 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
         });
       }
     },
-    async installUpdates(restartAfterInstall) {
+    async prepareUpdates() {
       const scope = state.updateResult?.upstream.installScope ?? "None";
       if (!canInstallScope(scope)) {
-        emit({ error: "没有可安装的上游组件更新" });
+        emit({ error: "没有可准备的上游组件更新" });
         return;
       }
 
-      beginBusy();
+      if (state.isPreparingUpdates || state.isApplyingPreparedUpdate) {
+        return;
+      }
+
+      emit({ isPreparingUpdates: true, error: null });
       try {
-        endBusy({
-          installResult: await commands.installUpstreamComponentUpdates(
-            scope,
-            restartAfterInstall,
-          ),
+        const componentPreparation = await commands.prepareUpstreamComponentUpdates(scope);
+        emit({
+          componentPreparation,
+          isPreparingUpdates: componentPreparation.status === "Preparing",
+          installResult: null,
         });
       } catch (caught) {
-        endBusy({ error: toErrorMessage(caught) });
+        emit({
+          error: toErrorMessage(caught),
+          isPreparingUpdates: false,
+        });
+      }
+    },
+    async refreshComponentPreparation() {
+      try {
+        const componentPreparation = await commands.getComponentUpdatePreparation();
+        emit({
+          componentPreparation,
+          isPreparingUpdates: componentPreparation.status === "Preparing",
+        });
+      } catch (caught) {
+        emit({ error: toErrorMessage(caught), isPreparingUpdates: false });
+      }
+    },
+    async applyPreparedUpdate(options) {
+      if (state.isApplyingPreparedUpdate) {
+        return;
+      }
+
+      if (state.componentPreparation?.status !== "Ready") {
+        emit({ error: "没有已准备好的组件更新" });
+        return;
+      }
+
+      const confirmed = await commands.confirmPreparedComponentUpdateRestart({
+        installScope: state.componentPreparation.installScope,
+        serviceStatus: options.serviceStatus,
+      });
+      if (!confirmed) {
+        emit({ isApplyingPreparedUpdate: false });
+        return;
+      }
+
+      emit({ isApplyingPreparedUpdate: true, error: null });
+      try {
+        const installResult = await commands.applyPreparedComponentUpdates();
+        emit({
+          installResult,
+          isApplyingPreparedUpdate: false,
+          componentPreparation: null,
+          isPreparingUpdates: false,
+        });
+      } catch (caught) {
+        emit({
+          error: toErrorMessage(caught),
+          isApplyingPreparedUpdate: false,
+        });
       }
     },
   };
@@ -297,7 +374,10 @@ export const settingsStore = createSettingsStore({
   getDesktopSettings,
   updateDesktopSettings,
   checkForUpdates,
-  installUpstreamComponentUpdates,
+  getComponentUpdatePreparation,
+  prepareUpstreamComponentUpdates,
+  applyPreparedComponentUpdates,
+  confirmPreparedComponentUpdateRestart,
 });
 
 export function useSettingsStore(): SettingsStoreState {

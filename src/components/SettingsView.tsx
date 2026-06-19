@@ -1,7 +1,8 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import type {
-  ComponentInstallResult,
+  ComponentApplyResult,
+  ComponentUpdatePreparationSnapshot,
   ComponentUpdateItem,
   DesktopSettings,
   ServiceSnapshot,
@@ -10,7 +11,10 @@ import type {
   UpdateStatus,
 } from "../bridge/types";
 import { getDesktopVersion, openExternalUrl } from "../bridge/commands";
-import type { SettingsDraft } from "../stores/settingsStore";
+import type {
+  ComponentPreparedUpdateApplyOptions,
+  SettingsDraft,
+} from "../stores/settingsStore";
 import { canEditServicePort, validateServicePort } from "../stores/settingsStore";
 import { FieldRow } from "./FieldRow";
 
@@ -19,14 +23,18 @@ interface SettingsViewProps {
   draft: SettingsDraft | null;
   serviceSnapshot: ServiceSnapshot | null;
   updateResult: UpdateCheckResult | null;
-  installResult: ComponentInstallResult | null;
+  installResult: ComponentApplyResult | null;
+  componentPreparation: ComponentUpdatePreparationSnapshot | null;
   error: string | null;
   isBusy: boolean;
   isCheckingUpdates: boolean;
+  isPreparingUpdates: boolean;
+  isApplyingPreparedUpdate: boolean;
   onLoad?: () => void | Promise<void>;
   onDraftChange: (patch: Partial<SettingsDraft>) => void;
   onCheckUpdates: () => void | Promise<void>;
-  onInstallUpdates: (restartAfterInstall: boolean) => void | Promise<void>;
+  onPrepareUpdates: () => void | Promise<void>;
+  onApplyPreparedUpdate: (options: ComponentPreparedUpdateApplyOptions) => void | Promise<void>;
   onOpenDataDirectory: () => void | Promise<void>;
   onOpenLogDirectory: () => void | Promise<void>;
   initialSection?: SettingsSectionId;
@@ -62,12 +70,16 @@ export function SettingsView(props: SettingsViewProps) {
     serviceSnapshot,
     updateResult,
     installResult,
+    componentPreparation,
     error,
     isBusy,
     isCheckingUpdates,
+    isPreparingUpdates,
+    isApplyingPreparedUpdate,
     onDraftChange,
     onCheckUpdates,
-    onInstallUpdates,
+    onPrepareUpdates,
+    onApplyPreparedUpdate,
     onOpenDataDirectory,
     onOpenLogDirectory,
     initialSection = "general",
@@ -80,6 +92,14 @@ export function SettingsView(props: SettingsViewProps) {
   const activeLabel = settingsSections.find((section) => section.id === activeSection)?.label ?? "通用";
   const lastUpdateCheckAt = updateResult?.checkedAt ?? settings?.lastUpdateCheckAt;
   const desktopReleaseUrl = updateResult?.desktop.releaseUrl ?? desktopReleaseFallbackUrl;
+  const preparationStatus = componentPreparation?.status ?? "Idle";
+  const isPreparationReady = preparationStatus === "Ready";
+  const isPreparing = preparationStatus === "Preparing" || isPreparingUpdates;
+  const shouldShowComponentUpdateAction =
+    updateResult?.upstream.action === "InstallInDesktop" ||
+    preparationStatus === "Preparing" ||
+    preparationStatus === "Ready" ||
+    isApplyingPreparedUpdate;
 
   useEffect(() => {
     let isMounted = true;
@@ -136,14 +156,15 @@ export function SettingsView(props: SettingsViewProps) {
               </div>
               {activeSection === "update" ? (
                 <div className="settings-header-actions update-header-actions">
-                  {updateResult?.upstream.action === "InstallInDesktop" ? (
-                    <button
-                      type="button"
+                  {shouldShowComponentUpdateAction ? (
+                    <ComponentUpdateActionButton
                       disabled={isBusy}
-                      onClick={() => void onInstallUpdates(true)}
-                    >
-                      更新组件
-                    </button>
+                      isPreparing={isPreparing}
+                      isApplying={isApplyingPreparedUpdate}
+                      isReady={isPreparationReady}
+                      onPrepareUpdates={onPrepareUpdates}
+                      onApplyPreparedUpdate={() => onApplyPreparedUpdate({ serviceStatus: status })}
+                    />
                   ) : null}
                   <CheckUpdatesButton
                     disabled={isBusy}
@@ -230,7 +251,12 @@ export function SettingsView(props: SettingsViewProps) {
                   <div className="update-block-header">
                     <div>
                       <h3 id="upstream-title">上游组件</h3>
-                      <p>{installResult?.message ?? updateResult?.upstream.message ?? "尚未检查"}</p>
+                      <p>
+                        {installResult?.message ??
+                          componentPreparation?.message ??
+                          updateResult?.upstream.message ??
+                          "尚未检查"}
+                      </p>
                     </div>
                   </div>
                   <div className="component-update-table" role="table" aria-label="上游组件">
@@ -335,6 +361,15 @@ interface CheckUpdatesButtonProps {
   onCheckUpdates: () => void | Promise<void>;
 }
 
+interface ComponentUpdateActionButtonProps {
+  disabled: boolean;
+  isPreparing: boolean;
+  isApplying: boolean;
+  isReady: boolean;
+  onPrepareUpdates: () => void | Promise<void>;
+  onApplyPreparedUpdate: () => void | Promise<void>;
+}
+
 function CheckUpdatesButton({
   disabled,
   isChecking,
@@ -355,6 +390,49 @@ function CheckUpdatesButton({
         </>
       ) : (
         "立即检查"
+      )}
+    </button>
+  );
+}
+
+function ComponentUpdateActionButton({
+  disabled,
+  isPreparing,
+  isApplying,
+  isReady,
+  onPrepareUpdates,
+  onApplyPreparedUpdate,
+}: ComponentUpdateActionButtonProps) {
+  const busy = isPreparing || isApplying;
+  const label = isApplying
+    ? "重启中..."
+    : isPreparing
+      ? "准备中..."
+      : isReady
+        ? "重启"
+        : "更新组件";
+
+  return (
+    <button
+      type="button"
+      className="component-update-action-button"
+      disabled={disabled || busy}
+      aria-busy={busy}
+      onClick={() => {
+        if (isReady) {
+          void onApplyPreparedUpdate();
+          return;
+        }
+        void onPrepareUpdates();
+      }}
+    >
+      {busy ? (
+        <>
+          <span className="button-spinner" aria-hidden="true" />
+          <span>{label}</span>
+        </>
+      ) : (
+        label
       )}
     </button>
   );

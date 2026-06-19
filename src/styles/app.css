@@ -58,8 +58,9 @@ button.secondary:hover,
   background: #f7f9fc;
 }
 
-.check-updates-button {
-  min-width: 92px;
+.check-updates-button,
+.component-update-action-button {
+  min-width: 104px;
 }
 
 .button-spinner {

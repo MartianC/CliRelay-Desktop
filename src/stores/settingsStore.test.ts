@@ -8,7 +8,11 @@ import {
   toSettingsPatch,
   validateServicePort,
 } from "./settingsStore";
-import type { DesktopSettings, UpdateCheckResult } from "../bridge/types";
+import type {
+  ComponentUpdatePreparationSnapshot,
+  DesktopSettings,
+  UpdateCheckResult,
+} from "../bridge/types";
 
 const loadedSettings: DesktopSettings = {
   schemaVersion: 1,
@@ -105,7 +109,10 @@ describe("settings store helpers", () => {
       getDesktopSettings: vi.fn(async () => loadedSettings),
       updateDesktopSettings,
       checkForUpdates: vi.fn(),
-      installUpstreamComponentUpdates: vi.fn(),
+      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+      prepareUpstreamComponentUpdates: vi.fn(),
+      applyPreparedComponentUpdates: vi.fn(),
+      confirmPreparedComponentUpdateRestart: vi.fn(),
     });
 
     await store.load();
@@ -127,7 +134,10 @@ describe("settings store helpers", () => {
       getDesktopSettings: vi.fn(async () => loadedSettings),
       updateDesktopSettings,
       checkForUpdates: vi.fn(),
-      installUpstreamComponentUpdates: vi.fn(),
+      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+      prepareUpstreamComponentUpdates: vi.fn(),
+      applyPreparedComponentUpdates: vi.fn(),
+      confirmPreparedComponentUpdateRestart: vi.fn(),
     });
 
     await store.load();
@@ -151,7 +161,10 @@ describe("settings store helpers", () => {
       getDesktopSettings: vi.fn(async () => loadedSettings),
       updateDesktopSettings,
       checkForUpdates: vi.fn(),
-      installUpstreamComponentUpdates: vi.fn(),
+      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+      prepareUpstreamComponentUpdates: vi.fn(),
+      applyPreparedComponentUpdates: vi.fn(),
+      confirmPreparedComponentUpdateRestart: vi.fn(),
     });
 
     await store.load();
@@ -181,14 +194,188 @@ describe("settings store helpers", () => {
       })),
       updateDesktopSettings: vi.fn(),
       checkForUpdates: vi.fn(),
-      installUpstreamComponentUpdates: vi.fn(),
+      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+      prepareUpstreamComponentUpdates: vi.fn(),
+      applyPreparedComponentUpdates: vi.fn(),
+      confirmPreparedComponentUpdateRestart: vi.fn(),
     });
 
     await store.load();
 
     expect(store.getState().updateResult).toEqual(cachedResult);
   });
+
+  test("load 时恢复已准备好的组件更新状态", async () => {
+    const store = createSettingsStore({
+      getDesktopSettings: vi.fn(async () => loadedSettings),
+      updateDesktopSettings: vi.fn(),
+      checkForUpdates: vi.fn(async () => updateResult("Both")),
+      getComponentUpdatePreparation: vi.fn(async () => ({
+        status: "Ready" as const,
+        installScope: "Both" as const,
+        message: "组件更新已准备好，点击重启完成替换",
+        startedAt: "2026-06-18T10:00:00Z",
+        finishedAt: "2026-06-18T10:01:00Z",
+        error: null,
+      })),
+      prepareUpstreamComponentUpdates: vi.fn(),
+      applyPreparedComponentUpdates: vi.fn(),
+      confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+    });
+
+    await store.load();
+
+    expect(store.getState().componentPreparation?.status).toBe("Ready");
+    expect(store.getState().isPreparingUpdates).toBe(false);
+  });
+
+  test("点击更新组件直接启动后台准备但不弹确认也不应用组件更新", async () => {
+    const prepareUpstreamComponentUpdates = vi.fn(async () => ({
+      status: "Preparing" as const,
+      installScope: "CliRelay" as const,
+      message: "正在后台准备组件更新",
+      startedAt: "2026-06-18T10:00:00Z",
+      finishedAt: null,
+      error: null,
+    }));
+    const applyPreparedComponentUpdates = vi.fn();
+    const confirmPreparedComponentUpdateRestart = vi.fn(async () => true);
+    const store = createSettingsStore({
+      getDesktopSettings: vi.fn(async () => loadedSettings),
+      updateDesktopSettings: vi.fn(),
+      checkForUpdates: vi.fn(async () => updateResult("CliRelay")),
+      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+      prepareUpstreamComponentUpdates,
+      applyPreparedComponentUpdates,
+      confirmPreparedComponentUpdateRestart,
+    });
+
+    await store.load();
+    await store.checkUpdates();
+    await store.prepareUpdates();
+
+    expect(prepareUpstreamComponentUpdates).toHaveBeenCalledWith("CliRelay");
+    expect(confirmPreparedComponentUpdateRestart).not.toHaveBeenCalled();
+    expect(applyPreparedComponentUpdates).not.toHaveBeenCalled();
+    expect(store.getState().componentPreparation?.status).toBe("Preparing");
+    expect(store.getState().isPreparingUpdates).toBe(true);
+  });
+
+  test("重复点击更新组件时不重复启动后台准备", async () => {
+    let resolvePreparation!: (value: ComponentUpdatePreparationSnapshot) => void;
+    const prepareUpstreamComponentUpdates = vi.fn(
+      () =>
+        new Promise<ComponentUpdatePreparationSnapshot>((resolve) => {
+          resolvePreparation = resolve;
+        }),
+    );
+    const store = createSettingsStore({
+      getDesktopSettings: vi.fn(async () => loadedSettings),
+      updateDesktopSettings: vi.fn(),
+      checkForUpdates: vi.fn(async () => updateResult("Both")),
+      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+      prepareUpstreamComponentUpdates,
+      applyPreparedComponentUpdates: vi.fn(),
+      confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+    });
+
+    await store.load();
+    await store.checkUpdates();
+
+    const firstPrepare = store.prepareUpdates();
+    const secondPrepare = store.prepareUpdates();
+
+    expect(prepareUpstreamComponentUpdates).toHaveBeenCalledTimes(1);
+    expect(store.getState().isPreparingUpdates).toBe(true);
+
+    resolvePreparation({
+      status: "Ready",
+      installScope: "Both",
+      message: "组件更新已准备好，点击重启完成替换",
+      startedAt: "2026-06-18T10:00:00Z",
+      finishedAt: "2026-06-18T10:01:00Z",
+      error: null,
+    });
+    await firstPrepare;
+    await secondPrepare;
+
+    expect(store.getState().componentPreparation?.status).toBe("Ready");
+    expect(store.getState().isPreparingUpdates).toBe(false);
+  });
+
+  test("用户取消重启确认时不应用已准备好的组件更新", async () => {
+    const applyPreparedComponentUpdates = vi.fn();
+    const store = createSettingsStore({
+      getDesktopSettings: vi.fn(async () => loadedSettings),
+      updateDesktopSettings: vi.fn(),
+      checkForUpdates: vi.fn(async () => updateResult("Both")),
+      getComponentUpdatePreparation: vi.fn(async () => ({
+        status: "Ready" as const,
+        installScope: "Both" as const,
+        message: "组件更新已准备好，点击重启完成替换",
+        startedAt: "2026-06-18T10:00:00Z",
+        finishedAt: "2026-06-18T10:01:00Z",
+        error: null,
+      })),
+      prepareUpstreamComponentUpdates: vi.fn(),
+      applyPreparedComponentUpdates,
+      confirmPreparedComponentUpdateRestart: vi.fn(async () => false),
+    });
+
+    await store.load();
+    await store.applyPreparedUpdate({ serviceStatus: "Running" });
+
+    expect(applyPreparedComponentUpdates).not.toHaveBeenCalled();
+    expect(store.getState().isApplyingPreparedUpdate).toBe(false);
+  });
+
+  test("确认重启后应用已准备好的组件更新", async () => {
+    const applyPreparedComponentUpdates = vi.fn(async () => ({
+      status: "Applied" as const,
+      message: "组件更新已应用，正在重启 Desktop",
+      appliedScope: "Both" as const,
+    }));
+    const confirmPreparedComponentUpdateRestart = vi.fn(async () => true);
+    const store = createSettingsStore({
+      getDesktopSettings: vi.fn(async () => loadedSettings),
+      updateDesktopSettings: vi.fn(),
+      checkForUpdates: vi.fn(async () => updateResult("Both")),
+      getComponentUpdatePreparation: vi.fn(async () => ({
+        status: "Ready" as const,
+        installScope: "Both" as const,
+        message: "组件更新已准备好，点击重启完成替换",
+        startedAt: "2026-06-18T10:00:00Z",
+        finishedAt: "2026-06-18T10:01:00Z",
+        error: null,
+      })),
+      prepareUpstreamComponentUpdates: vi.fn(),
+      applyPreparedComponentUpdates,
+      confirmPreparedComponentUpdateRestart,
+    });
+
+    await store.load();
+    await store.applyPreparedUpdate({ serviceStatus: "Running" });
+
+    expect(confirmPreparedComponentUpdateRestart).toHaveBeenCalledWith({
+      installScope: "Both",
+      serviceStatus: "Running",
+    });
+    expect(applyPreparedComponentUpdates).toHaveBeenCalledTimes(1);
+    expect(store.getState().installResult?.status).toBe("Applied");
+    expect(store.getState().componentPreparation).toBeNull();
+  });
 });
+
+function idlePreparation(): ComponentUpdatePreparationSnapshot {
+  return {
+    status: "Idle",
+    installScope: "None",
+    message: "",
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+  };
+}
 
 function updateResult(installScope: "None" | "CliRelay" | "codeProxy" | "Both"): UpdateCheckResult {
   return {

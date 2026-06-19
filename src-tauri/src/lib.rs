@@ -15,6 +15,7 @@ pub const APP_DISPLAY_NAME: &str = "CliRelay Desktop";
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(bootstrap::setup)
         .on_window_event(windows::handle_window_event)
         .invoke_handler(tauri::generate_handler![
@@ -31,7 +32,9 @@ pub fn run() {
             commands::get_desktop_settings,
             commands::update_desktop_settings,
             commands::check_for_updates,
-            commands::install_upstream_component_updates,
+            commands::get_component_update_preparation,
+            commands::prepare_upstream_component_updates,
+            commands::apply_prepared_component_updates,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

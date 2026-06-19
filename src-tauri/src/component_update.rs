@@ -48,6 +48,20 @@ pub struct ComponentInstallResult {
     pub installed_scope: crate::update_check::UpstreamInstallScope,
 }
 
+#[derive(Clone, Debug)]
+pub struct PreparedComponentUpdate {
+    pub install_scope: crate::update_check::UpstreamInstallScope,
+    pub clirelay: Option<PreparedComponentArtifact>,
+    pub code_proxy: Option<PreparedComponentArtifact>,
+    pub prepared_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PreparedComponentArtifact {
+    pub candidate: ComponentUpdateCandidate,
+    pub prepared_dir: PathBuf,
+}
+
 #[derive(Debug)]
 pub enum ComponentUpdateError {
     InvalidDigest(String),
@@ -248,6 +262,15 @@ pub fn install_clirelay_update(
     if !can_install_clirelay_for_status(service_status.clone()) {
         return Err(ComponentUpdateError::InvalidServiceStatus(service_status));
     }
+
+    let artifact = prepare_clirelay_update(paths, candidate)?;
+    apply_prepared_clirelay_update(paths, &artifact, service_status)
+}
+
+pub fn prepare_clirelay_update(
+    paths: &DesktopPaths,
+    candidate: &ComponentUpdateCandidate,
+) -> Result<PreparedComponentArtifact, ComponentUpdateError> {
     if candidate.subject != UpdateSubject::CliRelay {
         return Err(ComponentUpdateError::InvalidArchivePath(
             candidate.asset_name.clone(),
@@ -269,19 +292,45 @@ pub fn install_clirelay_update(
         .ok_or_else(|| ComponentUpdateError::MissingCliRelayBinary(staging.clone()))?;
     set_executable(&binary)?;
 
-    let new_sidecar = staging.join("sidecar");
-    replace_dir_with_empty(&new_sidecar)?;
-    fs::copy(&binary, new_sidecar.join("cli-proxy-api"))?;
-    set_executable(&new_sidecar.join("cli-proxy-api"))?;
+    let prepared_dir = staging.join("sidecar");
+    replace_dir_with_empty(&prepared_dir)?;
+    fs::copy(&binary, prepared_dir.join("cli-proxy-api"))?;
+    set_executable(&prepared_dir.join("cli-proxy-api"))?;
+
+    Ok(PreparedComponentArtifact {
+        candidate: candidate.clone(),
+        prepared_dir,
+    })
+}
+
+pub fn apply_prepared_clirelay_update(
+    paths: &DesktopPaths,
+    artifact: &PreparedComponentArtifact,
+    service_status: ServiceStatus,
+) -> Result<(), ComponentUpdateError> {
+    if !can_install_clirelay_for_status(service_status.clone()) {
+        return Err(ComponentUpdateError::InvalidServiceStatus(service_status));
+    }
+
+    let binary = artifact.prepared_dir.join("cli-proxy-api");
+    if !binary.is_file() {
+        return Err(ComponentUpdateError::MissingCliRelayBinary(
+            artifact.prepared_dir.clone(),
+        ));
+    }
 
     let backup = backup_existing(
         &paths.runtime_sidecar_dir,
         paths,
         "clirelay",
-        &candidate.version,
+        &artifact.candidate.version,
     )?;
-    atomic_replace_dir_with_restore(&new_sidecar, &paths.runtime_sidecar_dir, backup.as_deref())?;
-    update_component_record(paths, candidate)?;
+    atomic_replace_dir_with_restore(
+        &artifact.prepared_dir,
+        &paths.runtime_sidecar_dir,
+        backup.as_deref(),
+    )?;
+    update_component_record(paths, &artifact.candidate)?;
 
     Ok(())
 }
@@ -290,6 +339,14 @@ pub fn install_codeproxy_update(
     paths: &DesktopPaths,
     candidate: &ComponentUpdateCandidate,
 ) -> Result<(), ComponentUpdateError> {
+    let artifact = prepare_codeproxy_update(paths, candidate)?;
+    apply_prepared_codeproxy_update(paths, &artifact)
+}
+
+pub fn prepare_codeproxy_update(
+    paths: &DesktopPaths,
+    candidate: &ComponentUpdateCandidate,
+) -> Result<PreparedComponentArtifact, ComponentUpdateError> {
     if candidate.subject != UpdateSubject::CodeProxy {
         return Err(ComponentUpdateError::InvalidArchivePath(
             candidate.asset_name.clone(),
@@ -313,9 +370,29 @@ pub fn install_codeproxy_update(
         return Err(ComponentUpdateError::MissingPanelEntrypoint(entrypoint));
     }
 
-    let backup = backup_existing(&paths.panel_dir, paths, "codeproxy", &candidate.version)?;
-    atomic_replace_dir_with_restore(&staging_panel, &paths.panel_dir, backup.as_deref())?;
-    update_component_record(paths, candidate)?;
+    Ok(PreparedComponentArtifact {
+        candidate: candidate.clone(),
+        prepared_dir: staging_panel,
+    })
+}
+
+pub fn apply_prepared_codeproxy_update(
+    paths: &DesktopPaths,
+    artifact: &PreparedComponentArtifact,
+) -> Result<(), ComponentUpdateError> {
+    let entrypoint = artifact.prepared_dir.join("manage.html");
+    if !entrypoint.is_file() {
+        return Err(ComponentUpdateError::MissingPanelEntrypoint(entrypoint));
+    }
+
+    let backup = backup_existing(
+        &paths.panel_dir,
+        paths,
+        "codeproxy",
+        &artifact.candidate.version,
+    )?;
+    atomic_replace_dir_with_restore(&artifact.prepared_dir, &paths.panel_dir, backup.as_deref())?;
+    update_component_record(paths, &artifact.candidate)?;
 
     Ok(())
 }

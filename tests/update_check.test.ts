@@ -5,9 +5,13 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
   checkForUpdates,
-  installUpstreamComponentUpdates,
+  prepareUpstreamComponentUpdates,
 } from "../src/bridge/commands";
-import type { DesktopSettings, ServiceSnapshot } from "../src/bridge/types";
+import type {
+  ComponentUpdatePreparationSnapshot,
+  DesktopSettings,
+  ServiceSnapshot,
+} from "../src/bridge/types";
 import { formatUpdateCheckTime, SettingsView } from "../src/components/SettingsView";
 import {
   createSettingsStore,
@@ -86,42 +90,53 @@ describe("Task15 update bridge", () => {
     });
   });
 
-  test("安装上游组件时只发送 scope 和重启确认", async () => {
+  test("准备上游组件时只发送 scope 并返回准备快照", async () => {
     invokeMock.mockResolvedValueOnce({
-      status: "Success",
-      message: "已更新上游组件",
-      installed_scope: "CliRelay",
+      status: "Preparing",
+      message: "正在后台准备组件更新",
+      install_scope: "CliRelay",
+      started_at: "2026-06-18T10:00:00Z",
+      finished_at: null,
+      error: null,
     });
 
-    await installUpstreamComponentUpdates("CliRelay", true);
-
-    expect(invokeMock).toHaveBeenCalledWith("install_upstream_component_updates", {
+    await expect(prepareUpstreamComponentUpdates("CliRelay")).resolves.toMatchObject({
+      status: "Preparing",
       installScope: "CliRelay",
-      restartAfterInstall: true,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("prepare_upstream_component_updates", {
+      installScope: "CliRelay",
     });
   });
 });
 
 describe("Task15 settings store", () => {
-  test("更新检查后可根据 installScope 调用安装命令", async () => {
-    const installUpstreamComponentUpdates = vi.fn(async () => ({
-      status: "Success" as const,
-      message: "已更新",
-      installedScope: "CliRelay" as const,
+  test("更新检查后可根据 installScope 调用后台准备命令", async () => {
+    const prepareUpstreamComponentUpdates = vi.fn(async () => ({
+      status: "Preparing" as const,
+      message: "正在后台准备组件更新",
+      installScope: "CliRelay" as const,
+      startedAt: "2026-06-18T10:00:00Z",
+      finishedAt: null,
+      error: null,
     }));
     const store = createSettingsStore({
       getDesktopSettings: vi.fn(async () => settings),
       updateDesktopSettings: vi.fn(),
       checkForUpdates: vi.fn(async () => updateResult("CliRelay")),
-      installUpstreamComponentUpdates,
+      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+      prepareUpstreamComponentUpdates,
+      applyPreparedComponentUpdates: vi.fn(),
+      confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
     });
 
     await store.load();
     await store.checkUpdates();
-    await store.installUpdates(true);
+    await store.prepareUpdates();
 
-    expect(installUpstreamComponentUpdates).toHaveBeenCalledWith("CliRelay", true);
-    expect(store.getState().installResult?.message).toBe("已更新");
+    expect(prepareUpstreamComponentUpdates).toHaveBeenCalledWith("CliRelay");
+    expect(store.getState().componentPreparation?.message).toBe("正在后台准备组件更新");
   });
 
   test("更新检查期间暴露独立 loading 状态并忽略重复点击", async () => {
@@ -136,7 +151,10 @@ describe("Task15 settings store", () => {
       getDesktopSettings: vi.fn(async () => settings),
       updateDesktopSettings: vi.fn(),
       checkForUpdates,
-      installUpstreamComponentUpdates: vi.fn(),
+      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+      prepareUpstreamComponentUpdates: vi.fn(),
+      applyPreparedComponentUpdates: vi.fn(),
+      confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
     });
 
     await store.load();
@@ -169,13 +187,17 @@ describe("Task15 SettingsView update section", () => {
         serviceSnapshot: snapshot,
         updateResult: updateResult("Both"),
         installResult: null,
+        componentPreparation: null,
         error: null,
         isBusy: false,
         isCheckingUpdates: false,
+        isPreparingUpdates: false,
+        isApplyingPreparedUpdate: false,
         initialSection: "update",
         onDraftChange: vi.fn(),
         onCheckUpdates: vi.fn(),
-        onInstallUpdates: vi.fn(),
+        onPrepareUpdates: vi.fn(),
+        onApplyPreparedUpdate: vi.fn(),
         onOpenDataDirectory: vi.fn(),
         onOpenLogDirectory: vi.fn(),
       }),
@@ -220,13 +242,17 @@ describe("Task15 SettingsView update section", () => {
         serviceSnapshot: snapshot,
         updateResult: null,
         installResult: null,
+        componentPreparation: null,
         error: null,
         isBusy: false,
         isCheckingUpdates: false,
+        isPreparingUpdates: false,
+        isApplyingPreparedUpdate: false,
         initialSection: "update",
         onDraftChange: vi.fn(),
         onCheckUpdates: vi.fn(),
-        onInstallUpdates: vi.fn(),
+        onPrepareUpdates: vi.fn(),
+        onApplyPreparedUpdate: vi.fn(),
         onOpenDataDirectory: vi.fn(),
         onOpenLogDirectory: vi.fn(),
       }),
@@ -246,13 +272,17 @@ describe("Task15 SettingsView update section", () => {
         serviceSnapshot: snapshot,
         updateResult: null,
         installResult: null,
+        componentPreparation: null,
         error: null,
         isBusy: true,
         isCheckingUpdates: true,
+        isPreparingUpdates: false,
+        isApplyingPreparedUpdate: false,
         initialSection: "update",
         onDraftChange: vi.fn(),
         onCheckUpdates: vi.fn(),
-        onInstallUpdates: vi.fn(),
+        onPrepareUpdates: vi.fn(),
+        onApplyPreparedUpdate: vi.fn(),
         onOpenDataDirectory: vi.fn(),
         onOpenLogDirectory: vi.fn(),
       }),
@@ -275,7 +305,53 @@ describe("Task15 SettingsView update section", () => {
     expect(formatted).not.toContain("T");
     expect(formatUpdateCheckTime(null)).toBe("未检查");
   });
+
+  test("组件准备完成后更新按钮变为重启", () => {
+    const html = renderToStaticMarkup(
+      createElement(SettingsView, {
+        settings,
+        draft,
+        serviceSnapshot: snapshot,
+        updateResult: updateResult("Both"),
+        installResult: null,
+        componentPreparation: {
+          status: "Ready",
+          installScope: "Both",
+          message: "组件更新已准备好，点击重启完成替换",
+          startedAt: "2026-06-18T10:00:00Z",
+          finishedAt: "2026-06-18T10:01:00Z",
+          error: null,
+        },
+        error: null,
+        isBusy: false,
+        isCheckingUpdates: false,
+        isPreparingUpdates: false,
+        isApplyingPreparedUpdate: false,
+        initialSection: "update",
+        onDraftChange: vi.fn(),
+        onCheckUpdates: vi.fn(),
+        onPrepareUpdates: vi.fn(),
+        onApplyPreparedUpdate: vi.fn(),
+        onOpenDataDirectory: vi.fn(),
+        onOpenLogDirectory: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain(">重启</button>");
+    expect(html).not.toContain(">更新组件</button>");
+  });
 });
+
+function idlePreparation(): ComponentUpdatePreparationSnapshot {
+  return {
+    status: "Idle",
+    installScope: "None",
+    message: "",
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+  };
+}
 
 const settings: DesktopSettings = {
   schemaVersion: 1,

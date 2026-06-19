@@ -63,6 +63,21 @@ function App() {
 
   useEffect(() => {
     if (
+      windowRole !== "settings" ||
+      settings.componentPreparation?.status !== "Preparing"
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void settingsStore.refreshComponentPreparation();
+    }, 2000);
+
+    return () => window.clearInterval(timer);
+  }, [settings.componentPreparation?.status, windowRole]);
+
+  useEffect(() => {
+    if (
       !shouldAutoStartService({
         hasAttemptedAutoStart: didRequestAutoStart.current,
         isBusy: service.isBusy,
@@ -121,12 +136,16 @@ function App() {
         serviceSnapshot={service.snapshot}
         updateResult={settings.updateResult}
         installResult={settings.installResult}
+        componentPreparation={settings.componentPreparation}
         error={settings.error}
         isBusy={settings.isBusy}
         isCheckingUpdates={settings.isCheckingUpdates}
+        isPreparingUpdates={settings.isPreparingUpdates}
+        isApplyingPreparedUpdate={settings.isApplyingPreparedUpdate}
         onDraftChange={settingsStore.setDraft}
         onCheckUpdates={settingsStore.checkUpdates}
-        onInstallUpdates={settingsStore.installUpdates}
+        onPrepareUpdates={settingsStore.prepareUpdates}
+        onApplyPreparedUpdate={settingsStore.applyPreparedUpdate}
         onOpenDataDirectory={openDataDirectory}
         onOpenLogDirectory={openLogDirectory}
       />

@@ -1,13 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
+  applyPreparedComponentUpdates,
+  confirmPreparedComponentUpdateRestart,
   getDesktopVersion,
+  getComponentUpdatePreparation,
   getDesktopSettings,
   getServiceSnapshot,
   openExternalUrl,
+  prepareUpstreamComponentUpdates,
   updateDesktopSettings,
 } from "./commands";
 
@@ -19,18 +24,24 @@ vi.mock("@tauri-apps/api/app", () => ({
   getVersion: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  confirm: vi.fn(),
+}));
+
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(),
 }));
 
 const invokeMock = vi.mocked(invoke);
 const getVersionMock = vi.mocked(getVersion);
+const confirmMock = vi.mocked(confirm);
 const openUrlMock = vi.mocked(openUrl);
 
 describe("desktop command bridge", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     getVersionMock.mockReset();
+    confirmMock.mockReset();
     openUrlMock.mockReset();
   });
 
@@ -183,5 +194,102 @@ describe("desktop command bridge", () => {
 
     await expect(getDesktopVersion()).resolves.toBe("0.0.2-preview.3");
     expect(getVersionMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("组件重启确认框说明确认后才停止服务替换组件", async () => {
+    confirmMock.mockResolvedValueOnce(true);
+
+    await expect(
+      confirmPreparedComponentUpdateRestart({
+        installScope: "Both",
+        serviceStatus: "Running",
+      }),
+    ).resolves.toBe(true);
+
+    expect(confirmMock).toHaveBeenCalledWith(
+      [
+        "CliRelay 和 codeProxy 更新已准备好。",
+        "确认重启后会停止相关服务、替换已准备好的组件，并重启 Desktop 应用。",
+        "当前 CliRelay 服务正在运行，重启前会先停止服务。",
+        "现在重启并应用更新吗？",
+      ].join("\n"),
+      {
+        title: "确认重启并应用更新",
+        kind: "warning",
+        okLabel: "重启",
+        cancelLabel: "取消",
+      },
+    );
+  });
+
+  test("codeProxy-only 重启确认不提示停止 CliRelay 服务", async () => {
+    confirmMock.mockResolvedValueOnce(true);
+
+    await confirmPreparedComponentUpdateRestart({
+      installScope: "codeProxy",
+      serviceStatus: "Running",
+    });
+
+    expect(confirmMock).toHaveBeenCalledWith(
+      [
+        "codeProxy 更新已准备好。",
+        "确认重启后会停止相关服务、替换已准备好的组件，并重启 Desktop 应用。",
+        "现在重启并应用更新吗？",
+      ].join("\n"),
+      {
+        title: "确认重启并应用更新",
+        kind: "info",
+        okLabel: "重启",
+        cancelLabel: "取消",
+      },
+    );
+  });
+
+  test("准备、查询和应用组件更新命令映射 Rust 参数", async () => {
+    invokeMock
+      .mockResolvedValueOnce({
+        status: "Preparing",
+        install_scope: "CliRelay",
+        message: "正在后台准备组件更新",
+        started_at: "2026-06-18T10:00:00Z",
+        finished_at: null,
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        status: "Ready",
+        install_scope: "CliRelay",
+        message: "组件更新已准备好，点击重启完成替换",
+        started_at: "2026-06-18T10:00:00Z",
+        finished_at: "2026-06-18T10:01:00Z",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        status: "Applied",
+        message: "组件更新已应用，正在重启 Desktop",
+        applied_scope: "CliRelay",
+      });
+
+    await expect(prepareUpstreamComponentUpdates("CliRelay")).resolves.toMatchObject({
+      status: "Preparing",
+      installScope: "CliRelay",
+      startedAt: "2026-06-18T10:00:00Z",
+    });
+    await expect(getComponentUpdatePreparation()).resolves.toMatchObject({
+      status: "Ready",
+      installScope: "CliRelay",
+      finishedAt: "2026-06-18T10:01:00Z",
+    });
+    await expect(applyPreparedComponentUpdates()).resolves.toMatchObject({
+      status: "Applied",
+      appliedScope: "CliRelay",
+    });
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      "prepare_upstream_component_updates",
+      { installScope: "CliRelay" },
+    );
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "get_component_update_preparation");
+    expect(invokeMock).toHaveBeenNthCalledWith(3, "apply_prepared_component_updates");
   });
 });
