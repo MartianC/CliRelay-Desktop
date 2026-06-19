@@ -215,16 +215,6 @@ pub fn save_component_state(
     Ok(())
 }
 
-pub fn runtime_sidecar_if_valid(paths: &DesktopPaths) -> Option<PathBuf> {
-    if !paths.runtime_sidecar_executable.is_file() {
-        return None;
-    }
-
-    let state = load_component_state(paths).ok()?;
-    state.clirelay.as_ref()?;
-    Some(paths.runtime_sidecar_executable.clone())
-}
-
 pub fn current_component_versions(paths: &DesktopPaths) -> (String, String) {
     let state = load_component_state(paths).unwrap_or_default();
     let lock = bundled_upstream_lock();
