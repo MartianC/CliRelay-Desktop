@@ -294,15 +294,7 @@ impl ResourcePaths {
                 resource_dir.join("resources").join("panel"),
                 manifest_dir.join("resources").join("panel"),
             ]),
-            sidecar_executable: first_existing_path([
-                resource_dir
-                    .join("binaries")
-                    .join("clirelay-aarch64-apple-darwin"),
-                resource_dir.join("clirelay-aarch64-apple-darwin"),
-                manifest_dir
-                    .join("binaries")
-                    .join("clirelay-aarch64-apple-darwin"),
-            ]),
+            sidecar_executable: resolve_sidecar_executable(&resource_dir, &manifest_dir),
         })
     }
 }
@@ -894,6 +886,24 @@ fn first_existing_path<const N: usize>(paths: [PathBuf; N]) -> PathBuf {
         .unwrap_or_else(|| paths[0].clone())
 }
 
+fn resolve_sidecar_executable(resource_dir: &Path, manifest_dir: &Path) -> PathBuf {
+    let macos_sidecar = resource_dir
+        .parent()
+        .map(|contents_dir| contents_dir.join("MacOS").join("clirelay"))
+        .unwrap_or_else(|| resource_dir.join("clirelay"));
+
+    first_existing_path([
+        macos_sidecar,
+        resource_dir
+            .join("binaries")
+            .join("clirelay-aarch64-apple-darwin"),
+        resource_dir.join("clirelay-aarch64-apple-darwin"),
+        manifest_dir
+            .join("binaries")
+            .join("clirelay-aarch64-apple-darwin"),
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1094,6 +1104,42 @@ mod tests {
             state.manager.sidecar_executable(),
             paths.runtime_sidecar_executable.as_path()
         );
+    }
+
+    #[test]
+    fn sidecar_resolution_prefers_macos_external_bin_in_app_bundle() {
+        let root = std::env::temp_dir().join(format!(
+            "clirelay-desktop-sidecar-resolution-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let resource_dir = root
+            .join("CliRelay Desktop.app")
+            .join("Contents")
+            .join("Resources");
+        let macos_dir = root
+            .join("CliRelay Desktop.app")
+            .join("Contents")
+            .join("MacOS");
+        let manifest_dir = root.join("src-tauri");
+        std::fs::create_dir_all(&resource_dir).expect("创建 Resources 目录失败");
+        std::fs::create_dir_all(&macos_dir).expect("创建 MacOS 目录失败");
+        std::fs::create_dir_all(manifest_dir.join("binaries")).expect("创建 manifest binaries 失败");
+        std::fs::write(macos_dir.join("clirelay"), "bundle-sidecar")
+            .expect("写入 app bundle sidecar 失败");
+        std::fs::write(
+            manifest_dir
+                .join("binaries")
+                .join("clirelay-aarch64-apple-darwin"),
+            "dev-sidecar",
+        )
+        .expect("写入 dev sidecar 失败");
+
+        let resolved = resolve_sidecar_executable(&resource_dir, &manifest_dir);
+
+        assert_eq!(resolved, macos_dir.join("clirelay"));
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     fn service_snapshot(port: u16) -> ServiceSnapshot {
