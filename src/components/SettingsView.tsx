@@ -211,18 +211,15 @@ export function SettingsView(props: SettingsViewProps) {
                     <strong>{t("settings.language")}</strong>
                     <small>{t("settings.languageDescription")}</small>
                   </span>
-                  <select
-                    className="settings-select"
+                  <LanguageSegmentedControl
+                    label={t("settings.language")}
                     value={draft.locale}
-                    onChange={(event) =>
+                    onChange={(locale) =>
                       onDraftChange({
-                        locale: event.currentTarget.value as DesktopLocale,
+                        locale,
                       })
                     }
-                  >
-                    <option value="zh-CN">{localeLabels["zh-CN"]}</option>
-                    <option value="en">{localeLabels.en}</option>
-                  </select>
+                  />
                 </label>
               </SettingsPanel>
             ) : null}
@@ -382,6 +379,12 @@ interface ToggleRowProps {
   description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+}
+
+interface LanguageSegmentedControlProps {
+  label: string;
+  value: DesktopLocale;
+  onChange: (locale: DesktopLocale) => void;
 }
 
 interface ComponentUpdateRowProps {
@@ -636,6 +639,30 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
       />
       <span className="toggle-control" aria-hidden="true" />
     </label>
+  );
+}
+
+function LanguageSegmentedControl({
+  label,
+  value,
+  onChange,
+}: LanguageSegmentedControlProps) {
+  return (
+    <span className="language-segmented-control" role="radiogroup" aria-label={label}>
+      {(["zh-CN", "en"] as const).map((locale) => (
+        <label key={locale} className="language-segmented-option">
+          <input
+            className="language-segmented-input"
+            type="radio"
+            name="desktop-locale"
+            value={locale}
+            checked={value === locale}
+            onChange={() => onChange(locale)}
+          />
+          <span>{localeLabels[locale]}</span>
+        </label>
+      ))}
+    </span>
   );
 }
 

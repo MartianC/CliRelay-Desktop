@@ -85,6 +85,11 @@ describe("SettingsView", () => {
     expect(html).toContain("中文");
     expect(html).toContain("English");
     expect(html).toContain("settings-select-row");
+    expect(html).toContain("language-segmented-control");
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain('type="radio"');
+    expect(html).toContain('checked="" value="zh-CN"');
+    expect(html).not.toContain("<select");
     expect(html).toContain("切换 Desktop 与管理面板语言");
     expect(html).not.toContain("启动后自动启动服务");
     expect(html).not.toContain("启动时打开管理面板");

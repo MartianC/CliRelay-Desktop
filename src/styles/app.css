@@ -998,19 +998,71 @@ h2 {
   width: 120px;
 }
 
-.settings-select {
-  appearance: auto;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #243041;
-  min-height: 36px;
-  padding: 6px 10px;
-  width: min(220px, 100%);
+.language-segmented-control {
+  align-items: center;
+  background: #f0f1f3;
+  border: 0;
+  border-radius: 999px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  gap: 0;
+  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  padding: 3px;
 }
 
-.settings-select-row .settings-select {
-  flex: 0 0 min(220px, 42%);
+.language-segmented-option {
+  display: grid;
+  min-width: 0;
+  position: relative;
+}
+
+.language-segmented-input {
+  height: 1px;
+  margin: 0;
+  min-height: 0;
+  opacity: 0;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.language-segmented-option > span {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #9aa0a6;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.84rem;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+  white-space: nowrap;
+}
+
+.language-segmented-input:checked + span {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.14);
+  color: #111827;
+}
+
+.language-segmented-input:focus-visible + span {
+  outline: 3px solid rgb(15 23 42 / 0.12);
+  outline-offset: 2px;
+}
+
+.language-segmented-option:hover > span {
+  color: #6b7280;
+}
+
+.language-segmented-input:checked:hover + span {
+  color: #111827;
 }
 
 .status-settings-content {
@@ -1134,8 +1186,12 @@ h2 {
     flex-direction: column;
   }
 
-  .settings-select-row .settings-select {
-    flex-basis: auto;
+  .language-segmented-control {
+    align-self: flex-start;
+    width: min(100%, 240px);
+  }
+
+  .language-segmented-option > span {
     width: 100%;
   }
 
