@@ -10,6 +10,10 @@ use crate::service::manager::{
 use crate::service::ownership::ProcessOwnership;
 use crate::service::state::ServiceStatus;
 use crate::settings::{load_or_create_settings, save_settings, DesktopSettings, SettingsError};
+use crate::settings::{
+    read_management_secret_state, write_management_secret_key, DesktopLocale,
+    ManagementSecretStatus,
+};
 use crate::update_check::{
     build_update_check_result, component_releases_api_url, fetch_github_releases,
     fetch_latest_preview, select_component_release, ComponentUpdateCandidate, CurrentVersions,
@@ -24,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
-pub const SAFE_COMMAND_NAMES: [&str; 16] = [
+pub const SAFE_COMMAND_NAMES: [&str; 19] = [
     "get_service_snapshot",
     "start_service",
     "stop_service",
@@ -37,6 +41,9 @@ pub const SAFE_COMMAND_NAMES: [&str; 16] = [
     "copy_v1_endpoint",
     "get_desktop_settings",
     "update_desktop_settings",
+    "get_management_secret_status",
+    "set_management_secret_key",
+    "quit_desktop",
     "check_for_updates",
     "get_component_update_preparation",
     "prepare_upstream_component_updates",
@@ -237,6 +244,10 @@ impl DesktopCommandState {
         self.manager.snapshot()
     }
 
+    pub fn locale(&self) -> DesktopLocale {
+        self.settings.locale
+    }
+
     pub fn start_service(&mut self) -> Result<ServiceSnapshot, ManagerError> {
         self.manager.start_service()
     }
@@ -306,6 +317,7 @@ pub struct DesktopSettingsPatch {
     pub open_panel_on_start: Option<bool>,
     pub port: Option<u16>,
     pub auto_check_new_versions: Option<bool>,
+    pub locale: Option<DesktopLocale>,
 }
 
 impl DesktopSettingsPatch {
@@ -323,6 +335,7 @@ impl DesktopSettingsPatch {
             open_panel_on_start: raw.open_panel_on_start,
             port: raw.port,
             auto_check_new_versions: raw.auto_check_new_versions,
+            locale: raw.locale,
         })
     }
 }
@@ -349,6 +362,8 @@ struct RawDesktopSettingsPatch {
     port: Option<u16>,
     #[serde(default)]
     auto_check_new_versions: Option<bool>,
+    #[serde(default)]
+    locale: Option<DesktopLocale>,
     #[serde(flatten)]
     extra: BTreeMap<String, Value>,
 }
@@ -374,6 +389,10 @@ pub fn apply_desktop_settings_patch(
 
     if let Some(auto_check_new_versions) = patch.auto_check_new_versions {
         updated.auto_check_new_versions = auto_check_new_versions;
+    }
+
+    if let Some(locale) = patch.locale {
+        updated.locale = locale;
     }
 
     if let Some(port) = patch.port {
@@ -495,18 +514,79 @@ pub fn get_desktop_settings(
 
 #[tauri::command]
 pub fn update_desktop_settings(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SharedDesktopCommandState>,
     patch: DesktopSettingsPatch,
 ) -> Result<DesktopSettings, CommandError> {
-    let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
-    let status = state.manager.snapshot().status;
-    let updated = apply_desktop_settings_patch(&state.settings, status, patch)?;
+    let (updated, locale_changed) = {
+        let mut state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+        let status = state.manager.snapshot().status;
+        let previous_locale = state.settings.locale;
+        let updated = apply_desktop_settings_patch(&state.settings, status, patch)?;
+        let locale_changed = updated.locale != previous_locale;
 
-    save_settings(&state.paths, &updated)?;
-    state.manager.update_settings(updated.clone());
-    state.settings = updated.clone();
+        save_settings(&state.paths, &updated)?;
+        state.manager.update_settings(updated.clone());
+        state.settings = updated.clone();
+
+        (updated, locale_changed)
+    };
+
+    if locale_changed {
+        let _ = crate::tray::refresh_after_current_snapshot(&app);
+        let _ = crate::windows::panel::sync_panel_language(&app, updated.locale, true);
+    }
 
     Ok(updated)
+}
+
+#[tauri::command]
+pub fn get_management_secret_status(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SharedDesktopCommandState>,
+) -> Result<ManagementSecretStatus, CommandError> {
+    let resources = ResourcePaths::resolve(&app)?;
+    let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+    crate::settings::ensure_runtime_config(
+        &state.paths,
+        resources.config_example,
+        &state.settings,
+    )?;
+    Ok(read_management_secret_state(&state.paths)?)
+}
+
+#[tauri::command]
+pub fn set_management_secret_key(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SharedDesktopCommandState>,
+    secret_key: String,
+) -> Result<ManagementSecretStatus, CommandError> {
+    let secret_key = validate_management_secret_key(&secret_key)?;
+    let resources = ResourcePaths::resolve(&app)?;
+    let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+    crate::settings::ensure_runtime_config(
+        &state.paths,
+        resources.config_example,
+        &state.settings,
+    )?;
+    write_management_secret_key(&state.paths, secret_key)?;
+    Ok(ManagementSecretStatus::Configured)
+}
+
+#[tauri::command]
+pub fn quit_desktop(app: tauri::AppHandle) -> Result<(), CommandError> {
+    crate::tray::request_desktop_exit(&app);
+    Ok(())
+}
+
+pub fn validate_management_secret_key(value: &str) -> Result<&str, CommandError> {
+    if value.trim().is_empty() {
+        return Err(CommandError::InvalidSettingsPatch(
+            "管理密钥不能为空".to_string(),
+        ));
+    }
+
+    Ok(value)
 }
 
 #[tauri::command]
@@ -930,6 +1010,9 @@ mod tests {
                 "copy_v1_endpoint",
                 "get_desktop_settings",
                 "update_desktop_settings",
+                "get_management_secret_status",
+                "set_management_secret_key",
+                "quit_desktop",
                 "check_for_updates",
                 "get_component_update_preparation",
                 "prepare_upstream_component_updates",
@@ -1037,6 +1120,36 @@ mod tests {
     }
 
     #[test]
+    fn accepts_locale_settings_patch() {
+        let settings = DesktopSettings::default();
+        let patch = DesktopSettingsPatch::from_value(json!({ "locale": "en" }))
+            .expect("locale patch 应被允许");
+
+        let updated =
+            apply_desktop_settings_patch(&settings, ServiceStatus::Stopped, patch).unwrap();
+
+        assert_eq!(updated.locale, crate::settings::DesktopLocale::En);
+    }
+
+    #[test]
+    fn rejects_empty_management_secret_key() {
+        let error = validate_management_secret_key("  ").unwrap_err();
+
+        assert!(matches!(
+            error,
+            CommandError::InvalidSettingsPatch(message) if message.contains("管理密钥不能为空")
+        ));
+    }
+
+    #[test]
+    fn trims_only_for_management_secret_validation() {
+        assert_eq!(
+            validate_management_secret_key("  abc  ").unwrap(),
+            "  abc  "
+        );
+    }
+
+    #[test]
     fn endpoint_urls_are_derived_from_snapshot_port() {
         let snapshot = service_snapshot(8317);
 
@@ -1061,11 +1174,7 @@ mod tests {
             "9.9.9-preview.7",
         );
 
-        let state = DesktopCommandState::new(
-            paths,
-            settings,
-            ServiceManager::new(manager_config),
-        );
+        let state = DesktopCommandState::new(paths, settings, ServiceManager::new(manager_config));
 
         assert_eq!(state.current_versions().desktop, "9.9.9-preview.7");
     }
@@ -1092,11 +1201,8 @@ mod tests {
             PathBuf::from("bundle-sidecar"),
             "9.9.9-preview.7",
         );
-        let mut state = DesktopCommandState::new(
-            paths.clone(),
-            settings,
-            ServiceManager::new(manager_config),
-        );
+        let mut state =
+            DesktopCommandState::new(paths.clone(), settings, ServiceManager::new(manager_config));
 
         state.refresh_runtime_components();
 
@@ -1124,7 +1230,8 @@ mod tests {
         let manifest_dir = root.join("src-tauri");
         std::fs::create_dir_all(&resource_dir).expect("创建 Resources 目录失败");
         std::fs::create_dir_all(&macos_dir).expect("创建 MacOS 目录失败");
-        std::fs::create_dir_all(manifest_dir.join("binaries")).expect("创建 manifest binaries 失败");
+        std::fs::create_dir_all(manifest_dir.join("binaries"))
+            .expect("创建 manifest binaries 失败");
         std::fs::write(macos_dir.join("clirelay"), "bundle-sidecar")
             .expect("写入 app bundle sidecar 失败");
         std::fs::write(

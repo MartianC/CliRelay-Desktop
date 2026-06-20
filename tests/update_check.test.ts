@@ -16,10 +16,17 @@ import { formatUpdateCheckTime, SettingsView } from "../src/components/SettingsV
 import {
   createSettingsStore,
   type SettingsDraft,
+  type SettingsCommands,
 } from "../src/stores/settingsStore";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/plugin-autostart", () => ({
+  enable: vi.fn(),
+  disable: vi.fn(),
+  isEnabled: vi.fn(),
 }));
 
 const invokeMock = vi.mocked(invoke);
@@ -122,13 +129,10 @@ describe("Task15 settings store", () => {
       error: null,
     }));
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => settings),
-      updateDesktopSettings: vi.fn(),
+      ...testSettingsCommands({
       checkForUpdates: vi.fn(async () => updateResult("CliRelay")),
-      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
       prepareUpstreamComponentUpdates,
-      applyPreparedComponentUpdates: vi.fn(),
-      confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+      }),
     });
 
     await store.load();
@@ -148,13 +152,9 @@ describe("Task15 settings store", () => {
         }),
     );
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => settings),
-      updateDesktopSettings: vi.fn(),
+      ...testSettingsCommands({
       checkForUpdates,
-      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
-      prepareUpstreamComponentUpdates: vi.fn(),
-      applyPreparedComponentUpdates: vi.fn(),
-      confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+      }),
     });
 
     await store.load();
@@ -363,14 +363,15 @@ const settings: DesktopSettings = {
   autoCheckNewVersions: false,
   lastUpdateCheckAt: null,
   lastUpdateCheckResult: null,
+  locale: "zh-CN",
 };
 
 const draft: SettingsDraft = {
   autoStartApp: false,
-  autoStartService: true,
-  openPanelOnStart: true,
+  silentStart: false,
   portText: "8317",
   autoCheckNewVersions: false,
+  locale: "zh-CN",
 };
 
 const snapshot: ServiceSnapshot = {
@@ -387,6 +388,21 @@ const snapshot: ServiceSnapshot = {
   codeProxyVersion: "v0.4.0",
   sidecarSha256: "abc123",
 };
+
+function testSettingsCommands(overrides: Partial<SettingsCommands> = {}): SettingsCommands {
+  return {
+    getDesktopSettings: vi.fn(async () => settings),
+    updateDesktopSettings: vi.fn(async (patch) => ({ ...settings, ...patch })),
+    checkForUpdates: vi.fn(),
+    getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+    prepareUpstreamComponentUpdates: vi.fn(),
+    applyPreparedComponentUpdates: vi.fn(),
+    confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+    getAutoStartAppEnabled: vi.fn(async () => settings.autoStartApp),
+    setAutoStartAppEnabled: vi.fn(async () => undefined),
+    ...overrides,
+  };
+}
 
 function updateResult(installScope: "None" | "CliRelay" | "codeProxy" | "Both") {
   return {

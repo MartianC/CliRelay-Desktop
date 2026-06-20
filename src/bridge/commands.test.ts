@@ -10,9 +10,12 @@ import {
   getDesktopVersion,
   getComponentUpdatePreparation,
   getDesktopSettings,
+  getManagementSecretStatus,
   getServiceSnapshot,
   openExternalUrl,
   prepareUpstreamComponentUpdates,
+  quitDesktop,
+  setManagementSecretKey,
   updateDesktopSettings,
 } from "./commands";
 
@@ -26,6 +29,12 @@ vi.mock("@tauri-apps/api/app", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   confirm: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/plugin-autostart", () => ({
+  enable: vi.fn(),
+  disable: vi.fn(),
+  isEnabled: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
@@ -87,6 +96,7 @@ describe("desktop command bridge", () => {
       port: 8318,
       auto_check_new_versions: true,
       last_update_check_at: "2026-06-13T12:00:00Z",
+      locale: "en",
       last_update_check_result: {
         status: "UpToDate",
         message: "已是最新",
@@ -142,6 +152,7 @@ describe("desktop command bridge", () => {
       port: 8318,
       autoCheckNewVersions: true,
       lastUpdateCheckAt: "2026-06-13T12:00:00Z",
+      locale: "en",
       lastUpdateCheckResult: {
         checkedAt: "2026-06-13T12:00:00Z",
         upstream: {
@@ -164,12 +175,14 @@ describe("desktop command bridge", () => {
       port: 8320,
       auto_check_new_versions: false,
       last_update_check_at: null,
+      locale: "zh-CN",
     });
 
     await updateDesktopSettings({
       autoStartService: true,
       openPanelOnStart: true,
       port: 8320,
+      locale: "en",
     });
 
     expect(invokeMock).toHaveBeenCalledWith("update_desktop_settings", {
@@ -177,8 +190,23 @@ describe("desktop command bridge", () => {
         auto_start_service: true,
         open_panel_on_start: true,
         port: 8320,
+        locale: "en",
       },
     });
+  });
+
+  test("管理密钥命令映射 Rust 参数", async () => {
+    invokeMock.mockResolvedValueOnce("missing").mockResolvedValueOnce("configured");
+
+    await expect(getManagementSecretStatus()).resolves.toBe("missing");
+    await expect(setManagementSecretKey("  abc  ")).resolves.toBe("configured");
+    await quitDesktop();
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "get_management_secret_status");
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "set_management_secret_key", {
+      secretKey: "  abc  ",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(3, "quit_desktop");
   });
 
   test("外部网页通过 Tauri opener 交给系统浏览器打开", async () => {
@@ -203,6 +231,7 @@ describe("desktop command bridge", () => {
       confirmPreparedComponentUpdateRestart({
         installScope: "Both",
         serviceStatus: "Running",
+        locale: "zh-CN",
       }),
     ).resolves.toBe(true);
 
@@ -228,6 +257,7 @@ describe("desktop command bridge", () => {
     await confirmPreparedComponentUpdateRestart({
       installScope: "codeProxy",
       serviceStatus: "Running",
+      locale: "zh-CN",
     });
 
     expect(confirmMock).toHaveBeenCalledWith(

@@ -15,14 +15,15 @@ const settings: DesktopSettings = {
   autoCheckNewVersions: false,
   lastUpdateCheckAt: null,
   lastUpdateCheckResult: null,
+  locale: "zh-CN",
 };
 
 const draft: SettingsDraft = {
   autoStartApp: false,
-  autoStartService: true,
-  openPanelOnStart: true,
+  silentStart: false,
   portText: "8317",
   autoCheckNewVersions: false,
+  locale: "zh-CN",
 };
 
 const snapshot: ServiceSnapshot = {
@@ -79,10 +80,44 @@ describe("SettingsView", () => {
     expect(html).toContain('data-nav-icon="update"');
     expect(html).toContain('data-nav-icon="about"');
     expect(html).toContain("登录时启动 Desktop");
+    expect(html).toContain("静默启动");
+    expect(html).toContain("语言");
+    expect(html).toContain("中文");
+    expect(html).toContain("English");
+    expect(html).not.toContain("启动后自动启动服务");
+    expect(html).not.toContain("启动时打开管理面板");
     expect(html).toContain('class="toggle-control"');
     expect(html).not.toContain("保存");
     expect(html).not.toContain("数据目录");
     expect(html).not.toContain("Connected");
+  });
+
+  test("英文 locale 渲染通用页英文文案", () => {
+    const html = renderToStaticMarkup(
+      <SettingsView
+        settings={{ ...settings, locale: "en" }}
+        draft={{ ...draft, locale: "en" }}
+        serviceSnapshot={snapshot}
+        updateResult={null}
+        installResult={null}
+        componentPreparation={null}
+        error={null}
+        isBusy={false}
+        isCheckingUpdates={false}
+        isPreparingUpdates={false}
+        isApplyingPreparedUpdate={false}
+        onLoad={vi.fn()}
+        onDraftChange={vi.fn()}
+        onCheckUpdates={vi.fn()}
+        onPrepareUpdates={vi.fn()}
+        onApplyPreparedUpdate={vi.fn()}
+        onOpenDataDirectory={vi.fn()}
+        onOpenLogDirectory={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("General");
+    expect(html).toContain("Silent start");
   });
 
   test("Service 页面保留运行态端口禁用提示", () => {

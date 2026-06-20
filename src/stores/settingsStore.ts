@@ -4,14 +4,17 @@ import {
   applyPreparedComponentUpdates,
   checkForUpdates,
   confirmPreparedComponentUpdateRestart,
+  getAutoStartAppEnabled,
   getDesktopSettings,
   getComponentUpdatePreparation,
   prepareUpstreamComponentUpdates,
+  setAutoStartAppEnabled,
   updateDesktopSettings,
 } from "../bridge/commands";
 import type {
   ComponentApplyResult,
   ComponentUpdatePreparationSnapshot,
+  DesktopLocale,
   DesktopSettings,
   DesktopSettingsPatch,
   ServiceStatus,
@@ -22,10 +25,10 @@ import { toErrorMessage } from "./serviceStore";
 
 export interface SettingsDraft {
   autoStartApp: boolean;
-  autoStartService: boolean;
-  openPanelOnStart: boolean;
+  silentStart: boolean;
   portText: string;
   autoCheckNewVersions: boolean;
+  locale: DesktopLocale;
 }
 
 export interface SettingsStoreState {
@@ -53,6 +56,8 @@ export interface SettingsCommands {
   prepareUpstreamComponentUpdates: typeof prepareUpstreamComponentUpdates;
   applyPreparedComponentUpdates: typeof applyPreparedComponentUpdates;
   confirmPreparedComponentUpdateRestart: typeof confirmPreparedComponentUpdateRestart;
+  getAutoStartAppEnabled: typeof getAutoStartAppEnabled;
+  setAutoStartAppEnabled: typeof setAutoStartAppEnabled;
 }
 
 export interface SettingsStore {
@@ -105,10 +110,10 @@ export function validateServicePort(value: string): PortValidationResult {
 export function createPortDraft(settings: DesktopSettings): SettingsDraft {
   return {
     autoStartApp: settings.autoStartApp,
-    autoStartService: settings.autoStartService,
-    openPanelOnStart: settings.openPanelOnStart,
+    silentStart: !settings.openPanelOnStart,
     portText: String(settings.port),
     autoCheckNewVersions: settings.autoCheckNewVersions,
+    locale: settings.locale,
   };
 }
 
@@ -146,14 +151,15 @@ export function toSettingsPatch(
   if (draft.autoStartApp !== current.autoStartApp) {
     patch.autoStartApp = draft.autoStartApp;
   }
-  if (draft.autoStartService !== current.autoStartService) {
-    patch.autoStartService = draft.autoStartService;
-  }
-  if (draft.openPanelOnStart !== current.openPanelOnStart) {
-    patch.openPanelOnStart = draft.openPanelOnStart;
+  const openPanelOnStart = !draft.silentStart;
+  if (openPanelOnStart !== current.openPanelOnStart) {
+    patch.openPanelOnStart = openPanelOnStart;
   }
   if (draft.autoCheckNewVersions !== current.autoCheckNewVersions) {
     patch.autoCheckNewVersions = draft.autoCheckNewVersions;
+  }
+  if (draft.locale !== current.locale) {
+    patch.locale = draft.locale;
   }
   if (port.port !== current.port) {
     patch.port = port.port;
@@ -203,7 +209,15 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
     }
 
     beginBusy();
+    const previousSettings = state.settings;
+    const previousAutoStartApp = previousSettings.autoStartApp;
+    let systemAutoStartChanged = false;
     try {
+      if (patch.autoStartApp !== undefined) {
+        await commands.setAutoStartAppEnabled(patch.autoStartApp);
+        systemAutoStartChanged = true;
+      }
+
       const updated = await commands.updateDesktopSettings(patch);
       if (version < appliedSaveVersion) {
         endBusy();
@@ -216,12 +230,26 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
         draft: version === draftVersion ? createPortDraft(updated) : state.draft,
       });
     } catch (caught) {
+      if (patch.autoStartApp !== undefined && systemAutoStartChanged) {
+        try {
+          await commands.setAutoStartAppEnabled(previousAutoStartApp);
+        } catch {
+          // 这里保留原始保存错误；下一次加载会重新以系统登录项状态校准。
+        }
+      }
+
       if (version < appliedSaveVersion) {
         endBusy();
         return;
       }
 
-      endBusy({ error: toErrorMessage(caught) });
+      endBusy({
+        error:
+          patch.autoStartApp !== undefined
+            ? "登录时启动设置失败，请检查系统权限。"
+            : toErrorMessage(caught),
+        draft: createPortDraft(previousSettings),
+      });
     }
   }
 
@@ -234,7 +262,21 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
     async load() {
       beginBusy();
       try {
-        const settings = await commands.getDesktopSettings();
+        const rawSettings = await commands.getDesktopSettings();
+        let settings = rawSettings;
+        let loadError: string | null = null;
+
+        try {
+          const systemAutoStartApp = await commands.getAutoStartAppEnabled();
+          if (systemAutoStartApp !== rawSettings.autoStartApp) {
+            settings = await commands.updateDesktopSettings({
+              autoStartApp: systemAutoStartApp,
+            });
+          }
+        } catch {
+          loadError = "登录时启动状态读取失败，请检查系统权限。";
+        }
+
         const componentPreparation = await commands.getComponentUpdatePreparation();
         draftVersion += 1;
         appliedSaveVersion = draftVersion;
@@ -244,6 +286,7 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
           updateResult: settings.lastUpdateCheckResult,
           installResult: null,
           componentPreparation,
+          error: loadError,
           isPreparingUpdates: componentPreparation.status === "Preparing",
           isApplyingPreparedUpdate: false,
         });
@@ -341,6 +384,7 @@ export function createSettingsStore(commands: SettingsCommands): SettingsStore {
       const confirmed = await commands.confirmPreparedComponentUpdateRestart({
         installScope: state.componentPreparation.installScope,
         serviceStatus: options.serviceStatus,
+        locale: state.settings?.locale ?? "zh-CN",
       });
       if (!confirmed) {
         emit({ isApplyingPreparedUpdate: false });
@@ -378,6 +422,8 @@ export const settingsStore = createSettingsStore({
   prepareUpstreamComponentUpdates,
   applyPreparedComponentUpdates,
   confirmPreparedComponentUpdateRestart,
+  getAutoStartAppEnabled,
+  setAutoStartAppEnabled,
 });
 
 export function useSettingsStore(): SettingsStoreState {

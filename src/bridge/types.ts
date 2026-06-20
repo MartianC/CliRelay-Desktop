@@ -8,6 +8,8 @@ export type ServiceStatus =
   | "Error";
 
 export type ProcessOwnership = "Owned" | "External" | "Stale" | "Unknown";
+export type DesktopLocale = "zh-CN" | "en";
+export type ManagementSecretStatus = "configured" | "missing";
 
 export interface ServiceSnapshot {
   status: ServiceStatus;
@@ -34,6 +36,7 @@ export interface DesktopSettings {
   autoCheckNewVersions: boolean;
   lastUpdateCheckAt: string | null;
   lastUpdateCheckResult: UpdateCheckResult | null;
+  locale: DesktopLocale;
 }
 
 export interface DesktopSettingsPatch {
@@ -42,6 +45,7 @@ export interface DesktopSettingsPatch {
   openPanelOnStart?: boolean;
   port?: number;
   autoCheckNewVersions?: boolean;
+  locale?: DesktopLocale;
 }
 
 export type UpdateSubject = "Desktop" | "CliRelay" | "codeProxy";

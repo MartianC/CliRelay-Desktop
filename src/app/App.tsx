@@ -1,8 +1,17 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef, useState } from "react";
 
-import { copyEndpoint, openDataDirectory, openLogDirectory, openSettings } from "../bridge/commands";
+import {
+  copyEndpoint,
+  getManagementSecretStatus,
+  openDataDirectory,
+  openLogDirectory,
+  openSettings,
+  quitDesktop,
+  setManagementSecretKey,
+} from "../bridge/commands";
 import { SettingsView } from "../components/SettingsView";
+import { ManagementSecretDialog } from "../components/ManagementSecretDialog";
 import { StatusView } from "../components/StatusView";
 import { serviceStore, shouldUseRecoveryView, useServiceStore } from "../stores/serviceStore";
 import {
@@ -10,18 +19,24 @@ import {
   shouldAutoCheckUpdates,
   useSettingsStore,
 } from "../stores/settingsStore";
+import { useI18n } from "../i18n/I18nProvider";
 import "../styles/app.css";
 
 type WindowRole = "main" | "settings";
+export type SecretGateState = "checking" | "missing" | "configured" | "failed";
 
 function App() {
   const [windowRole, setWindowRole] = useState<WindowRole>("main");
   const [statusRequested, setStatusRequested] = useState(false);
+  const [secretGateState, setSecretGateState] = useState<SecretGateState>("checking");
+  const [secretGateError, setSecretGateError] = useState<string | null>(null);
+  const [isSavingSecret, setIsSavingSecret] = useState(false);
   const service = useServiceStore();
   const settings = useSettingsStore();
   const didRequestPanel = useRef(false);
   const didRequestAutoStart = useRef(false);
   const didRequestAutoUpdateCheck = useRef(false);
+  const didHideShell = useRef(false);
 
   useEffect(() => {
     try {
@@ -32,6 +47,31 @@ function App() {
       setWindowRole("main");
     }
   }, []);
+
+  useEffect(() => {
+    if (windowRole !== "main" || !settings.settings || secretGateState !== "checking") {
+      return;
+    }
+
+    let isCancelled = false;
+    void getManagementSecretStatus()
+      .then((status) => {
+        if (!isCancelled) {
+          setSecretGateState(status === "configured" ? "configured" : "missing");
+          setSecretGateError(null);
+        }
+      })
+      .catch((caught) => {
+        if (!isCancelled) {
+          setSecretGateState("failed");
+          setSecretGateError(toDisplayError(caught));
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [secretGateState, settings.settings, windowRole]);
 
   useEffect(() => {
     void serviceStore.refresh();
@@ -86,6 +126,7 @@ function App() {
         snapshotStatus: service.snapshot?.status ?? null,
         statusRequested,
         windowRole,
+        secretGateState,
       })
     ) {
       return;
@@ -100,6 +141,7 @@ function App() {
     service.snapshot?.status,
     statusRequested,
     windowRole,
+    secretGateState,
   ]);
 
   useEffect(() => {
@@ -107,10 +149,12 @@ function App() {
       windowRole !== "main" ||
       statusRequested ||
       didRequestPanel.current ||
+      !settings.settings ||
       !shouldOpenPanelAfterStartup({
         panelOpened: service.panelOpened,
         panelOpening: service.panelOpening,
         snapshotStatus: service.snapshot?.status ?? null,
+        openPanelOnStart: settings.settings.openPanelOnStart,
       })
     ) {
       return;
@@ -124,9 +168,57 @@ function App() {
     service.panelOpened,
     service.panelOpening,
     service.snapshot?.status,
+    settings.settings,
     statusRequested,
     windowRole,
   ]);
+
+  useEffect(() => {
+    if (
+      !settings.settings ||
+      !shouldHideShellAfterSilentStartup({
+        hasHiddenShell: didHideShell.current,
+        openPanelOnStart: settings.settings.openPanelOnStart,
+        snapshotStatus: service.snapshot?.status ?? null,
+        windowRole,
+        statusRequested,
+      })
+    ) {
+      return;
+    }
+
+    didHideShell.current = true;
+    void hideShellWindow();
+  }, [service.snapshot?.status, settings.settings, statusRequested, windowRole]);
+
+  async function handleSubmitManagementSecret(secretKey: string) {
+    setIsSavingSecret(true);
+    setSecretGateError(null);
+    try {
+      const status = await setManagementSecretKey(secretKey);
+      setSecretGateState(status === "configured" ? "configured" : "missing");
+    } catch (caught) {
+      setSecretGateError(toDisplayError(caught));
+      setSecretGateState("missing");
+    } finally {
+      setIsSavingSecret(false);
+    }
+  }
+
+  function handleCancelManagementSecret() {
+    void quitDesktop();
+  }
+
+  const managementSecretDialog =
+    windowRole === "main" &&
+    (secretGateState === "missing" || secretGateState === "failed") ? (
+      <ManagementSecretDialog
+        error={secretGateError}
+        isSaving={isSavingSecret}
+        onSubmit={handleSubmitManagementSecret}
+        onCancel={handleCancelManagementSecret}
+      />
+    ) : null;
 
   if (windowRole === "settings") {
     return (
@@ -157,33 +249,40 @@ function App() {
     (service.snapshot && shouldUseRecoveryView(service.snapshot.status))
   ) {
     return (
-      <StatusView
-        snapshot={service.snapshot}
-        error={service.error}
-        isBusy={service.isBusy || service.panelOpening}
-        onRefresh={serviceStore.refresh}
-        onOpenPanel={serviceStore.openPanel}
-        onStart={serviceStore.start}
-        onStop={serviceStore.stop}
-        onRestart={serviceStore.restart}
-        onOpenDataDirectory={openDataDirectory}
-        onOpenLogDirectory={openLogDirectory}
-        onCopyEndpoint={copyEndpoint}
-        onChangePort={openSettings}
-        onCancelExternal={() => setStatusRequested(false)}
-      />
+      <>
+        <StatusView
+          snapshot={service.snapshot}
+          error={service.error}
+          isBusy={service.isBusy || service.panelOpening}
+          onRefresh={serviceStore.refresh}
+          onOpenPanel={serviceStore.openPanel}
+          onStart={serviceStore.start}
+          onStop={serviceStore.stop}
+          onRestart={serviceStore.restart}
+          onOpenDataDirectory={openDataDirectory}
+          onOpenLogDirectory={openLogDirectory}
+          onCopyEndpoint={copyEndpoint}
+          onChangePort={openSettings}
+          onCancelExternal={() => setStatusRequested(false)}
+          locale={settings.settings?.locale ?? "zh-CN"}
+        />
+        {managementSecretDialog}
+      </>
     );
   }
 
   return (
-    <StartupShell
-      status={service.snapshot?.status ?? "Starting"}
-      panelOpening={service.panelOpening}
-      panelOpened={service.panelOpened}
-      isBusy={service.isBusy}
-      startupFailed={Boolean(service.error)}
-      onOpenStatus={() => setStatusRequested(true)}
-    />
+    <>
+      <StartupShell
+        status={service.snapshot?.status ?? "Starting"}
+        panelOpening={service.panelOpening}
+        panelOpened={service.panelOpened}
+        isBusy={service.isBusy}
+        startupFailed={Boolean(service.error)}
+        onOpenStatus={() => setStatusRequested(true)}
+      />
+      {managementSecretDialog}
+    </>
   );
 }
 
@@ -204,20 +303,21 @@ export function StartupShell({
   startupFailed,
   onOpenStatus,
 }: StartupShellProps) {
+  const { t } = useI18n();
   const steps = [
-    "准备运行环境",
-    "启动 CliRelay",
-    "等待 /manage",
-    "打开 Panel",
+    t("startup.prepareEnvironment"),
+    t("startup.startCliRelay"),
+    t("startup.waitManage"),
+    t("startup.openPanel"),
   ] as const;
   const currentStep = getStartupStep(status, panelOpening, panelOpened, startupFailed);
   const progress = `${Math.max(18, currentStep * 25)}%`;
   const statusText =
     startupFailed
-      ? "启动失败"
+      ? t("startup.failed")
       : panelOpening || panelOpened
-        ? "正在切换到 Panel"
-        : "启动服务中";
+        ? t("startup.switchingPanel")
+        : t("startup.startingService");
 
   return (
     <main className="app-shell startup-shell">
@@ -264,7 +364,7 @@ export function StartupShell({
                 disabled={isBusy}
                 onClick={onOpenStatus}
               >
-                打开状态
+                {t("startup.openStatus")}
               </button>
             ) : null}
           </div>
@@ -307,6 +407,7 @@ interface AutoStartInput {
   snapshotStatus: string | null;
   statusRequested: boolean;
   windowRole: WindowRole;
+  secretGateState: SecretGateState;
 }
 
 export function shouldAutoStartService({
@@ -317,9 +418,11 @@ export function shouldAutoStartService({
   snapshotStatus,
   statusRequested,
   windowRole,
+  secretGateState,
 }: AutoStartInput): boolean {
   return (
     windowRole === "main" &&
+    secretGateState === "configured" &&
     !statusRequested &&
     !hasAttemptedAutoStart &&
     !isBusy &&
@@ -333,14 +436,32 @@ interface OpenPanelAfterStartupInput {
   panelOpened: boolean;
   panelOpening: boolean;
   snapshotStatus: string | null;
+  openPanelOnStart: boolean;
 }
 
 export function shouldOpenPanelAfterStartup({
   panelOpened,
   panelOpening,
   snapshotStatus,
+  openPanelOnStart,
 }: OpenPanelAfterStartupInput): boolean {
-  return !panelOpening && !panelOpened && snapshotStatus === "Running";
+  return openPanelOnStart && !panelOpening && !panelOpened && snapshotStatus === "Running";
+}
+
+export function shouldHideShellAfterSilentStartup(input: {
+  hasHiddenShell: boolean;
+  openPanelOnStart: boolean;
+  snapshotStatus: string | null;
+  windowRole: WindowRole;
+  statusRequested: boolean;
+}): boolean {
+  return (
+    input.windowRole === "main" &&
+    !input.statusRequested &&
+    !input.hasHiddenShell &&
+    !input.openPanelOnStart &&
+    input.snapshotStatus === "Running"
+  );
 }
 
 async function hideShellWindow(): Promise<void> {
@@ -352,6 +473,18 @@ async function hideShellWindow(): Promise<void> {
   } catch {
     // 浏览器开发模式下没有 Tauri window runtime。
   }
+}
+
+function toDisplayError(caught: unknown): string {
+  if (caught instanceof Error) {
+    return caught.message;
+  }
+
+  if (typeof caught === "string") {
+    return caught;
+  }
+
+  return "操作失败";
 }
 
 export default App;

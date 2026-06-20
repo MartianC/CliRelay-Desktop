@@ -1,15 +1,18 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type {
   ComponentApplyResult,
   ComponentUpdatePreparationSnapshot,
   ComponentUpdateItem,
+  DesktopLocale,
   DesktopUpdateItem,
   DesktopSettings,
   DesktopSettingsPatch,
+  ManagementSecretStatus,
   ProcessOwnership,
   ServiceSnapshot,
   ServiceStatus,
@@ -44,6 +47,7 @@ interface RawDesktopSettings {
   auto_check_new_versions: boolean;
   last_update_check_at: string | null;
   last_update_check_result?: RawUpdateCheckResult | null;
+  locale?: DesktopLocale;
 }
 
 interface RawDesktopUpdateItem {
@@ -103,6 +107,7 @@ interface RawComponentApplyResult {
 export interface PreparedComponentUpdateRestartConfirmation {
   installScope: UpstreamInstallScope;
   serviceStatus: ServiceStatus;
+  locale: DesktopLocale;
 }
 
 export async function getServiceSnapshot(): Promise<ServiceSnapshot> {
@@ -141,6 +146,19 @@ export async function openExternalUrl(url: string | URL): Promise<void> {
   await openUrl(url);
 }
 
+export async function setAutoStartAppEnabled(enabled: boolean): Promise<void> {
+  if (enabled) {
+    await enable();
+    return;
+  }
+
+  await disable();
+}
+
+export async function getAutoStartAppEnabled(): Promise<boolean> {
+  return isEnabled();
+}
+
 export async function getDesktopVersion(): Promise<string> {
   return getVersion();
 }
@@ -169,6 +187,20 @@ export async function updateDesktopSettings(
   );
 }
 
+export async function getManagementSecretStatus(): Promise<ManagementSecretStatus> {
+  return invoke<ManagementSecretStatus>("get_management_secret_status");
+}
+
+export async function setManagementSecretKey(
+  secretKey: string,
+): Promise<ManagementSecretStatus> {
+  return invoke<ManagementSecretStatus>("set_management_secret_key", { secretKey });
+}
+
+export async function quitDesktop(): Promise<void> {
+  await invoke("quit_desktop");
+}
+
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
   return toUpdateCheckResult(await invoke<RawUpdateCheckResult>("check_for_updates"));
 }
@@ -177,26 +209,41 @@ export async function confirmPreparedComponentUpdateRestart(
   context: PreparedComponentUpdateRestartConfirmation,
 ): Promise<boolean> {
   return confirm(buildPreparedComponentUpdateRestartMessage(context), {
-    title: "确认重启并应用更新",
+    title: tForLocale(context.locale, "update.restartTitle"),
     kind: isServiceRestartRequiredForPreparedComponentApply(context) ? "warning" : "info",
-    okLabel: "重启",
-    cancelLabel: "取消",
+    okLabel: tForLocale(context.locale, "update.restartOk"),
+    cancelLabel: tForLocale(context.locale, "update.restartCancel"),
   });
 }
 
 export function buildPreparedComponentUpdateRestartMessage(
   context: PreparedComponentUpdateRestartConfirmation,
 ): string {
-  const lines = [
-    `${componentUpdateScopeLabel(context.installScope)} 更新已准备好。`,
-    "确认重启后会停止相关服务、替换已准备好的组件，并重启 Desktop 应用。",
-  ];
+  const scope = componentUpdateScopeLabel(context.installScope, context.locale);
+  const lines =
+    context.locale === "en"
+      ? [
+          `${scope} update is ready.`,
+          "Restarting will stop the related service, replace the prepared components, and relaunch Desktop.",
+        ]
+      : [
+          `${scope} 更新已准备好。`,
+          "确认重启后会停止相关服务、替换已准备好的组件，并重启 Desktop 应用。",
+        ];
 
   if (isServiceRestartRequiredForPreparedComponentApply(context)) {
-    lines.push("当前 CliRelay 服务正在运行，重启前会先停止服务。");
+    lines.push(
+      context.locale === "en"
+        ? "CliRelay is currently running and will be stopped before restart."
+        : "当前 CliRelay 服务正在运行，重启前会先停止服务。",
+    );
   }
 
-  lines.push("现在重启并应用更新吗？");
+  lines.push(
+    context.locale === "en"
+      ? "Restart now and apply the update?"
+      : "现在重启并应用更新吗？",
+  );
   return lines.join("\n");
 }
 
@@ -330,6 +377,7 @@ function toDesktopSettings(raw: RawDesktopSettings): DesktopSettings {
     lastUpdateCheckResult: raw.last_update_check_result
       ? toUpdateCheckResult(raw.last_update_check_result)
       : null,
+    locale: raw.locale ?? "zh-CN",
   };
 }
 
@@ -353,6 +401,9 @@ function toRawSettingsPatch(
   if (patch.autoCheckNewVersions !== undefined) {
     raw.auto_check_new_versions = patch.autoCheckNewVersions;
   }
+  if (patch.locale !== undefined) {
+    raw.locale = patch.locale;
+  }
 
   return raw;
 }
@@ -367,15 +418,37 @@ function installScopeIncludesCliRelay(scope: UpstreamInstallScope): boolean {
   return scope === "CliRelay" || scope === "Both";
 }
 
-function componentUpdateScopeLabel(scope: UpstreamInstallScope): string {
+function componentUpdateScopeLabel(scope: UpstreamInstallScope, locale: DesktopLocale): string {
   switch (scope) {
     case "CliRelay":
       return "CliRelay";
     case "codeProxy":
       return "codeProxy";
     case "Both":
-      return "CliRelay 和 codeProxy";
+      return locale === "en" ? "CliRelay and codeProxy" : "CliRelay 和 codeProxy";
     case "None":
-      return "组件";
+      return locale === "en" ? "Component" : "组件";
   }
+}
+
+type DialogMessageKey =
+  | "update.restartTitle"
+  | "update.restartOk"
+  | "update.restartCancel";
+
+const dialogMessages: Record<DesktopLocale, Record<DialogMessageKey, string>> = {
+  "zh-CN": {
+    "update.restartTitle": "确认重启并应用更新",
+    "update.restartOk": "重启",
+    "update.restartCancel": "取消",
+  },
+  en: {
+    "update.restartTitle": "Confirm restart and apply updates",
+    "update.restartOk": "Restart",
+    "update.restartCancel": "Cancel",
+  },
+};
+
+function tForLocale(locale: DesktopLocale, key: DialogMessageKey): string {
+  return dialogMessages[locale]?.[key] ?? dialogMessages["zh-CN"][key];
 }

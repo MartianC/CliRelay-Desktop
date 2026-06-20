@@ -40,7 +40,7 @@ describe("StatusView", () => {
     );
 
     expect(html).toContain("菜单 / Dock / 恢复状态");
-    expect(html).toContain("当前状态");
+    expect(html).toContain("运行状态");
     expect(html).toContain("Panel URL");
     expect(html).toContain("打开日志目录");
     expect(html).toContain("连接现有服务");

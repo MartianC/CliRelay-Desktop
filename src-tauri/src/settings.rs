@@ -12,6 +12,31 @@ pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
 pub const DEFAULT_SERVICE_PORT: u16 = 8317;
 pub const MIN_SERVICE_PORT: u16 = 1024;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DesktopLocale {
+    #[default]
+    #[serde(rename = "zh-CN")]
+    ZhCn,
+    #[serde(rename = "en")]
+    En,
+}
+
+impl DesktopLocale {
+    pub const fn as_panel_language(self) -> &'static str {
+        match self {
+            Self::ZhCn => "zh-CN",
+            Self::En => "en",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagementSecretStatus {
+    Configured,
+    Missing,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DesktopSettings {
     #[serde(alias = "schemaVersion")]
@@ -31,6 +56,8 @@ pub struct DesktopSettings {
     pub last_update_check_at: Option<DateTime<Utc>>,
     #[serde(default, alias = "lastUpdateCheckResult")]
     pub last_update_check_result: Option<UpdateCheckResult>,
+    #[serde(default)]
+    pub locale: DesktopLocale,
 }
 
 impl Default for DesktopSettings {
@@ -45,6 +72,7 @@ impl Default for DesktopSettings {
             auto_check_new_versions: false,
             last_update_check_at: None,
             last_update_check_result: None,
+            locale: DesktopLocale::ZhCn,
         }
     }
 }
@@ -224,6 +252,49 @@ pub fn render_runtime_config(source: &str, port: u16) -> Result<String, Settings
     Ok(rendered)
 }
 
+pub fn management_secret_state_from_config(
+    config: &str,
+) -> Result<ManagementSecretStatus, SettingsError> {
+    let Some(value) = find_remote_management_scalar(config, "secret-key") else {
+        return Ok(ManagementSecretStatus::Missing);
+    };
+
+    if value.trim_matches('"').trim_matches('\'').trim().is_empty() {
+        Ok(ManagementSecretStatus::Missing)
+    } else {
+        Ok(ManagementSecretStatus::Configured)
+    }
+}
+
+pub fn render_config_with_management_secret(
+    config: &str,
+    secret_key: &str,
+) -> Result<String, SettingsError> {
+    let secret_value = serde_json::to_string(secret_key)?;
+    Ok(render_remote_management_scalar(
+        config,
+        "secret-key",
+        &secret_value,
+    ))
+}
+
+pub fn read_management_secret_state(
+    paths: &DesktopPaths,
+) -> Result<ManagementSecretStatus, SettingsError> {
+    let config = fs::read_to_string(&paths.config_file)?;
+    management_secret_state_from_config(&config)
+}
+
+pub fn write_management_secret_key(
+    paths: &DesktopPaths,
+    secret_key: &str,
+) -> Result<(), SettingsError> {
+    let config = fs::read_to_string(&paths.config_file)?;
+    let updated = render_config_with_management_secret(&config, secret_key)?;
+    fs::write(&paths.config_file, updated)?;
+    Ok(())
+}
+
 pub fn ensure_panel_resources(
     paths: &DesktopPaths,
     bundled_panel_dir: impl AsRef<Path>,
@@ -286,6 +357,102 @@ fn leading_whitespace_len(line: &str) -> usize {
         .count()
 }
 
+fn find_remote_management_scalar(config: &str, key: &str) -> Option<String> {
+    let lines = config.lines().collect::<Vec<_>>();
+    let section_start = find_top_level_remote_management_section(&lines)?;
+    let section_end = remote_management_section_end(&lines, section_start);
+    let child_indent = remote_management_child_indent(&lines, section_start, section_end);
+    let key_prefix = format!("{key}:");
+
+    lines[section_start + 1..section_end]
+        .iter()
+        .find_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty()
+                || leading_whitespace_len(line) != child_indent
+                || !trimmed.starts_with(&key_prefix)
+            {
+                return None;
+            }
+
+            Some(trimmed[key_prefix.len()..].trim().to_string())
+        })
+}
+
+fn render_remote_management_scalar(config: &str, key: &str, value: &str) -> String {
+    let mut lines = config.lines().map(ToString::to_string).collect::<Vec<_>>();
+    let new_line = |indent: usize| format!("{}{}: {}", " ".repeat(indent), key, value);
+
+    if let Some(section_start) = find_top_level_remote_management_section(
+        &lines.iter().map(String::as_str).collect::<Vec<_>>(),
+    ) {
+        let borrowed = lines.iter().map(String::as_str).collect::<Vec<_>>();
+        let section_end = remote_management_section_end(&borrowed, section_start);
+        let child_indent = remote_management_child_indent(&borrowed, section_start, section_end);
+        let key_prefix = format!("{key}:");
+
+        if let Some(existing_index) = borrowed[section_start + 1..section_end]
+            .iter()
+            .position(|line| {
+                let trimmed = line.trim();
+                !trimmed.is_empty()
+                    && leading_whitespace_len(line) == child_indent
+                    && trimmed.starts_with(&key_prefix)
+            })
+            .map(|index| section_start + 1 + index)
+        {
+            lines[existing_index] = new_line(child_indent);
+        } else {
+            lines.insert(section_start + 1, new_line(child_indent));
+        }
+    } else {
+        lines.push("remote-management:".to_string());
+        lines.push(new_line(2));
+    }
+
+    let mut rendered = lines.join("\n");
+    if config.ends_with('\n') {
+        rendered.push('\n');
+    }
+    rendered
+}
+
+fn find_top_level_remote_management_section(lines: &[&str]) -> Option<usize> {
+    lines
+        .iter()
+        .position(|line| leading_whitespace_len(line) == 0 && line.trim() == "remote-management:")
+}
+
+fn remote_management_section_end(lines: &[&str], section_start: usize) -> usize {
+    lines[section_start + 1..]
+        .iter()
+        .position(|line| {
+            let trimmed = line.trim();
+            !trimmed.is_empty() && leading_whitespace_len(line) == 0
+        })
+        .map(|index| section_start + 1 + index)
+        .unwrap_or(lines.len())
+}
+
+fn remote_management_child_indent(
+    lines: &[&str],
+    section_start: usize,
+    section_end: usize,
+) -> usize {
+    lines[section_start + 1..section_end]
+        .iter()
+        .find_map(|line| {
+            let trimmed = line.trim();
+            let indent = leading_whitespace_len(line);
+            if trimmed.is_empty() || indent == 0 {
+                None
+            } else {
+                Some(indent)
+            }
+        })
+        .unwrap_or(2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,6 +496,13 @@ mod tests {
         let serialized = serde_json::to_value(&settings).expect("序列化默认设置失败");
 
         assert_eq!(serialized["schema_version"], 1);
+    }
+
+    #[test]
+    fn default_settings_use_chinese_locale() {
+        let settings = DesktopSettings::default();
+
+        assert_eq!(settings.locale, DesktopLocale::ZhCn);
     }
 
     #[test]
@@ -415,6 +589,75 @@ mod tests {
             config.contains("panel-github-repository: \"https://github.com/kittors/codeProxy\"")
         );
         assert!(!paths.runtime_dir.join("auths").exists());
+    }
+
+    #[test]
+    fn detects_missing_management_secret_key_variants() {
+        for config in [
+            "remote-management:\n  secret-key: \"\"\n",
+            "remote-management:\n  secret-key:\n",
+            "remote-management:\n  allow-remote: false\n",
+            "port: 8317\n",
+        ] {
+            assert_eq!(
+                management_secret_state_from_config(config).unwrap(),
+                ManagementSecretStatus::Missing
+            );
+        }
+    }
+
+    #[test]
+    fn detects_configured_management_secret_key() {
+        let config = "remote-management:\n  secret-key: \"abc: 123\"\n";
+
+        assert_eq!(
+            management_secret_state_from_config(config).unwrap(),
+            ManagementSecretStatus::Configured
+        );
+    }
+
+    #[test]
+    fn replaces_existing_management_secret_key() {
+        let config = [
+            "port: 8317",
+            "remote-management:",
+            "  allow-remote: false",
+            "  secret-key: \"\"",
+            "  disable-control-panel: false",
+            "",
+        ]
+        .join("\n");
+
+        let updated = render_config_with_management_secret(&config, "abc: 123").unwrap();
+
+        assert!(updated.contains("secret-key: \"abc: 123\""));
+        assert!(updated.contains("disable-control-panel: false"));
+    }
+
+    #[test]
+    fn inserts_management_secret_key_when_field_is_missing() {
+        let config = [
+            "port: 8317",
+            "remote-management:",
+            "  allow-remote: false",
+            "  disable-control-panel: false",
+            "",
+        ]
+        .join("\n");
+
+        let updated = render_config_with_management_secret(&config, "abc#123").unwrap();
+
+        assert!(updated.contains("remote-management:\n  secret-key: \"abc#123\"\n"));
+        assert!(updated.contains("  disable-control-panel: false"));
+    }
+
+    #[test]
+    fn appends_remote_management_section_when_missing() {
+        let config = "port: 8317\n";
+
+        let updated = render_config_with_management_secret(config, "abc").unwrap();
+
+        assert!(updated.ends_with("remote-management:\n  secret-key: \"abc\"\n"));
     }
 
     #[test]

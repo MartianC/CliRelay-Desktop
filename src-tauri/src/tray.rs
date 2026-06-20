@@ -1,4 +1,5 @@
 use crate::service::state::ServiceStatus;
+use crate::settings::DesktopLocale;
 use crate::{
     commands::{CommandError, DesktopCommandState, SharedDesktopCommandState},
     service::manager::{ManagerError, ServiceSnapshot},
@@ -27,6 +28,21 @@ pub const LABEL_RESTART_SERVICE: &str = "重新启动";
 pub const LABEL_OPEN_DATA_DIR: &str = "打开数据目录";
 pub const LABEL_OPEN_LOG_DIR: &str = "打开日志目录";
 pub const LABEL_QUIT: &str = "退出 CliRelay Desktop";
+pub const LABEL_STATUS_RUNNING_EN: &str = "CliRelay ● Running";
+pub const LABEL_STATUS_STOPPED_EN: &str = "CliRelay ● Stopped";
+pub const LABEL_STATUS_STARTING_EN: &str = "CliRelay ● Starting";
+pub const LABEL_STATUS_STOPPING_EN: &str = "CliRelay ● Stopping";
+pub const LABEL_STATUS_UNHEALTHY_EN: &str = "CliRelay ● Unhealthy";
+pub const LABEL_STATUS_EXTERNAL_EN: &str = "CliRelay ● External service";
+pub const LABEL_STATUS_ERROR_EN: &str = "CliRelay ● Error";
+pub const LABEL_OPEN_PANEL_EN: &str = "Open management panel";
+pub const LABEL_SETTINGS_EN: &str = "Settings";
+pub const LABEL_START_SERVICE_EN: &str = "Start service";
+pub const LABEL_STOP_SERVICE_EN: &str = "Stop service";
+pub const LABEL_RESTART_SERVICE_EN: &str = "Restart";
+pub const LABEL_OPEN_DATA_DIR_EN: &str = "Open data directory";
+pub const LABEL_OPEN_LOG_DIR_EN: &str = "Open log directory";
+pub const LABEL_QUIT_EN: &str = "Quit CliRelay Desktop";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayMenuItemId {
@@ -121,18 +137,18 @@ pub fn refresh_tray_menu<R: Runtime>(
     tray.set_menu(Some(menu))
 }
 
-pub fn tray_menu_items(status: ServiceStatus) -> Vec<TrayMenuItemSpec> {
+pub fn tray_menu_items(status: ServiceStatus, locale: DesktopLocale) -> Vec<TrayMenuItemSpec> {
     let mut items = vec![
-        TrayMenuItemSpec::disabled(TrayMenuItemId::StatusTitle, status_title(&status)),
-        TrayMenuItemSpec::enabled(TrayMenuItemId::OpenPanel, LABEL_OPEN_PANEL),
+        TrayMenuItemSpec::disabled(TrayMenuItemId::StatusTitle, status_title(&status, locale)),
+        TrayMenuItemSpec::enabled(TrayMenuItemId::OpenPanel, open_panel_label(locale)),
     ];
 
-    items.extend(service_action_items(&status));
+    items.extend(service_action_items(&status, locale));
     items.extend([
         //TrayMenuItemSpec::enabled(TrayMenuItemId::OpenDataDirectory, LABEL_OPEN_DATA_DIR),
         //TrayMenuItemSpec::enabled(TrayMenuItemId::OpenLogDirectory, LABEL_OPEN_LOG_DIR),
-        TrayMenuItemSpec::enabled(TrayMenuItemId::Settings, LABEL_SETTINGS),
-        TrayMenuItemSpec::enabled(TrayMenuItemId::Quit, LABEL_QUIT),
+        TrayMenuItemSpec::enabled(TrayMenuItemId::Settings, settings_label(locale)),
+        TrayMenuItemSpec::enabled(TrayMenuItemId::Quit, quit_label(locale)),
     ]);
 
     items
@@ -174,8 +190,9 @@ fn build_tray_menu<R: Runtime>(
     status: ServiceStatus,
 ) -> tauri::Result<Menu<R>> {
     let menu = Menu::new(app)?;
+    let locale = current_locale(app);
 
-    for item in tray_menu_items(status) {
+    for item in tray_menu_items(status, locale) {
         menu.append(&MenuItem::with_id(
             app,
             item.id.as_str(),
@@ -266,9 +283,15 @@ fn run_service_action<R: Runtime>(
     result.map(|_| ()).map_err(CommandError::from)
 }
 
-fn refresh_after_current_snapshot<R: Runtime>(app: &AppHandle<R>) -> Result<(), CommandError> {
+pub fn refresh_after_current_snapshot<R: Runtime>(app: &AppHandle<R>) -> Result<(), CommandError> {
     let snapshot = current_service_snapshot(app)?;
     refresh_tray_menu(app, snapshot.status).map_err(CommandError::from)
+}
+
+fn current_locale<R: Runtime>(app: &AppHandle<R>) -> DesktopLocale {
+    app.try_state::<SharedDesktopCommandState>()
+        .and_then(|state| state.lock().ok().map(|state| state.locale()))
+        .unwrap_or_default()
 }
 
 enum DesktopPathTarget {
@@ -314,35 +337,90 @@ impl TrayMenuItemSpec {
     }
 }
 
-fn status_title(status: &ServiceStatus) -> &'static str {
-    match status {
-        ServiceStatus::Stopped => LABEL_STATUS_STOPPED,
-        ServiceStatus::Starting => LABEL_STATUS_STARTING,
-        ServiceStatus::Running => LABEL_STATUS_RUNNING,
-        ServiceStatus::Stopping => LABEL_STATUS_STOPPING,
-        ServiceStatus::Unhealthy => LABEL_STATUS_UNHEALTHY,
-        ServiceStatus::External => LABEL_STATUS_EXTERNAL,
-        ServiceStatus::Error => LABEL_STATUS_ERROR,
+fn status_title(status: &ServiceStatus, locale: DesktopLocale) -> &'static str {
+    match (status, locale) {
+        (ServiceStatus::Stopped, DesktopLocale::ZhCn) => LABEL_STATUS_STOPPED,
+        (ServiceStatus::Starting, DesktopLocale::ZhCn) => LABEL_STATUS_STARTING,
+        (ServiceStatus::Running, DesktopLocale::ZhCn) => LABEL_STATUS_RUNNING,
+        (ServiceStatus::Stopping, DesktopLocale::ZhCn) => LABEL_STATUS_STOPPING,
+        (ServiceStatus::Unhealthy, DesktopLocale::ZhCn) => LABEL_STATUS_UNHEALTHY,
+        (ServiceStatus::External, DesktopLocale::ZhCn) => LABEL_STATUS_EXTERNAL,
+        (ServiceStatus::Error, DesktopLocale::ZhCn) => LABEL_STATUS_ERROR,
+        (ServiceStatus::Stopped, DesktopLocale::En) => LABEL_STATUS_STOPPED_EN,
+        (ServiceStatus::Starting, DesktopLocale::En) => LABEL_STATUS_STARTING_EN,
+        (ServiceStatus::Running, DesktopLocale::En) => LABEL_STATUS_RUNNING_EN,
+        (ServiceStatus::Stopping, DesktopLocale::En) => LABEL_STATUS_STOPPING_EN,
+        (ServiceStatus::Unhealthy, DesktopLocale::En) => LABEL_STATUS_UNHEALTHY_EN,
+        (ServiceStatus::External, DesktopLocale::En) => LABEL_STATUS_EXTERNAL_EN,
+        (ServiceStatus::Error, DesktopLocale::En) => LABEL_STATUS_ERROR_EN,
     }
 }
 
-fn service_action_items(status: &ServiceStatus) -> Vec<TrayMenuItemSpec> {
+fn service_action_items(status: &ServiceStatus, locale: DesktopLocale) -> Vec<TrayMenuItemSpec> {
     match status {
         ServiceStatus::Stopped => {
             vec![TrayMenuItemSpec::enabled(
                 TrayMenuItemId::StartService,
-                LABEL_START_SERVICE,
+                start_service_label(locale),
             )]
         }
         ServiceStatus::Running | ServiceStatus::Unhealthy => vec![
-            TrayMenuItemSpec::enabled(TrayMenuItemId::StopService, LABEL_STOP_SERVICE),
-            TrayMenuItemSpec::enabled(TrayMenuItemId::RestartService, LABEL_RESTART_SERVICE),
+            TrayMenuItemSpec::enabled(TrayMenuItemId::StopService, stop_service_label(locale)),
+            TrayMenuItemSpec::enabled(
+                TrayMenuItemId::RestartService,
+                restart_service_label(locale),
+            ),
         ],
         ServiceStatus::Error => vec![
-            TrayMenuItemSpec::enabled(TrayMenuItemId::StartService, LABEL_START_SERVICE),
-            TrayMenuItemSpec::enabled(TrayMenuItemId::RestartService, LABEL_RESTART_SERVICE),
+            TrayMenuItemSpec::enabled(TrayMenuItemId::StartService, start_service_label(locale)),
+            TrayMenuItemSpec::enabled(
+                TrayMenuItemId::RestartService,
+                restart_service_label(locale),
+            ),
         ],
         ServiceStatus::Starting | ServiceStatus::Stopping | ServiceStatus::External => Vec::new(),
+    }
+}
+
+fn open_panel_label(locale: DesktopLocale) -> &'static str {
+    match locale {
+        DesktopLocale::ZhCn => LABEL_OPEN_PANEL,
+        DesktopLocale::En => LABEL_OPEN_PANEL_EN,
+    }
+}
+
+fn settings_label(locale: DesktopLocale) -> &'static str {
+    match locale {
+        DesktopLocale::ZhCn => LABEL_SETTINGS,
+        DesktopLocale::En => LABEL_SETTINGS_EN,
+    }
+}
+
+fn start_service_label(locale: DesktopLocale) -> &'static str {
+    match locale {
+        DesktopLocale::ZhCn => LABEL_START_SERVICE,
+        DesktopLocale::En => LABEL_START_SERVICE_EN,
+    }
+}
+
+fn stop_service_label(locale: DesktopLocale) -> &'static str {
+    match locale {
+        DesktopLocale::ZhCn => LABEL_STOP_SERVICE,
+        DesktopLocale::En => LABEL_STOP_SERVICE_EN,
+    }
+}
+
+fn restart_service_label(locale: DesktopLocale) -> &'static str {
+    match locale {
+        DesktopLocale::ZhCn => LABEL_RESTART_SERVICE,
+        DesktopLocale::En => LABEL_RESTART_SERVICE_EN,
+    }
+}
+
+fn quit_label(locale: DesktopLocale) -> &'static str {
+    match locale {
+        DesktopLocale::ZhCn => LABEL_QUIT,
+        DesktopLocale::En => LABEL_QUIT_EN,
     }
 }
 
@@ -409,15 +487,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn tray_labels_follow_english_locale() {
+        let labels = tray_menu_items(Running, crate::settings::DesktopLocale::En)
+            .into_iter()
+            .map(|item| item.label)
+            .collect::<Vec<_>>();
+
+        assert!(labels.contains(&"Open management panel"));
+        assert!(labels.contains(&"Settings"));
+        assert!(labels.contains(&"Quit CliRelay Desktop"));
+    }
+
     fn labels_for(status: ServiceStatus) -> Vec<&'static str> {
-        tray_menu_items(status)
+        tray_menu_items(status, crate::settings::DesktopLocale::ZhCn)
             .into_iter()
             .map(|item| item.label)
             .collect()
     }
 
     fn service_action_labels_for(status: ServiceStatus) -> Vec<&'static str> {
-        tray_menu_items(status)
+        tray_menu_items(status, crate::settings::DesktopLocale::ZhCn)
             .into_iter()
             .filter(|item| {
                 matches!(

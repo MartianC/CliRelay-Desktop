@@ -4,6 +4,7 @@ import type {
   ComponentApplyResult,
   ComponentUpdatePreparationSnapshot,
   ComponentUpdateItem,
+  DesktopLocale,
   DesktopSettings,
   ServiceSnapshot,
   ServiceStatus,
@@ -16,6 +17,7 @@ import type {
   SettingsDraft,
 } from "../stores/settingsStore";
 import { canEditServicePort, validateServicePort } from "../stores/settingsStore";
+import { localeLabels, tForLocale, type MessageKey } from "../i18n/locales";
 import { FieldRow } from "./FieldRow";
 
 interface SettingsViewProps {
@@ -44,12 +46,7 @@ const settingsAccent = "#1d4ed8";
 
 type SettingsSectionId = "general" | "service" | "update" | "about";
 
-const settingsSections: Array<{ id: SettingsSectionId; label: string }> = [
-  { id: "general", label: "通用" },
-  { id: "service", label: "服务" },
-  { id: "update", label: "更新" },
-  { id: "about", label: "关于" },
-];
+const settingsSections: SettingsSectionId[] = ["general", "service", "update", "about"];
 
 const serviceStatusLabels: Record<ServiceStatus, string> = {
   Stopped: "已停止",
@@ -59,6 +56,16 @@ const serviceStatusLabels: Record<ServiceStatus, string> = {
   Unhealthy: "异常",
   External: "外部占用",
   Error: "错误",
+};
+
+const serviceStatusLabelsEn: Record<ServiceStatus, string> = {
+  Stopped: "Stopped",
+  Starting: "Starting",
+  Running: "Running",
+  Stopping: "Stopping",
+  Unhealthy: "Unhealthy",
+  External: "External",
+  Error: "Error",
 };
 
 const desktopReleaseFallbackUrl = "https://github.com/MartianC/CliRelay-Desktop/releases";
@@ -85,11 +92,13 @@ export function SettingsView(props: SettingsViewProps) {
     initialSection = "general",
   } = props;
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(initialSection);
-  const [desktopVersion, setDesktopVersion] = useState("正在读取版本");
   const status = serviceSnapshot?.status ?? "Stopped";
+  const locale = draft?.locale ?? settings?.locale ?? "zh-CN";
+  const t = (key: MessageKey) => tForLocale(locale, key);
+  const [desktopVersion, setDesktopVersion] = useState(t("settings.readingVersion"));
   const canEditPort = canEditServicePort(status);
   const portValidation = draft ? validateServicePort(draft.portText) : null;
-  const activeLabel = settingsSections.find((section) => section.id === activeSection)?.label ?? "通用";
+  const activeLabel = settingsSectionLabel(activeSection, t);
   const lastUpdateCheckAt = updateResult?.checkedAt ?? settings?.lastUpdateCheckAt;
   const desktopReleaseUrl = updateResult?.desktop.releaseUrl ?? desktopReleaseFallbackUrl;
   const preparationStatus = componentPreparation?.status ?? "Idle";
@@ -112,14 +121,14 @@ export function SettingsView(props: SettingsViewProps) {
       })
       .catch(() => {
         if (isMounted) {
-          setDesktopVersion("未知");
+          setDesktopVersion(t("settings.unknown"));
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [locale]);
 
   return (
     <main
@@ -127,22 +136,22 @@ export function SettingsView(props: SettingsViewProps) {
       style={{ "--settings-accent": settingsAccent } as CSSProperties}
     >
       {!settings || !draft ? (
-        <section className="surface empty-state">正在读取设置…</section>
+        <section className="surface empty-state">{t("settings.loading")}</section>
       ) : (
         <div className="settings-layout">
-          <aside className="settings-sidebar" aria-label="设置导航">
+          <aside className="settings-sidebar" aria-label={t("settings.navigation")}>
             <div className="settings-sidebar-title">CliRelay Desktop</div>
             <nav className="settings-nav">
               {settingsSections.map((section) => (
                 <button
-                  key={section.id}
+                  key={section}
                   type="button"
                   className="settings-nav-item"
-                  aria-current={activeSection === section.id ? "page" : undefined}
-                  onClick={() => setActiveSection(section.id)}
+                  aria-current={activeSection === section ? "page" : undefined}
+                  onClick={() => setActiveSection(section)}
                 >
-                  <NavIcon id={section.id} />
-                  <span>{section.label}</span>
+                  <NavIcon id={section} />
+                  <span>{settingsSectionLabel(section, t)}</span>
                 </button>
               ))}
             </nav>
@@ -162,6 +171,12 @@ export function SettingsView(props: SettingsViewProps) {
                       isPreparing={isPreparing}
                       isApplying={isApplyingPreparedUpdate}
                       isReady={isPreparationReady}
+                      labels={{
+                        preparing: t("settings.preparing"),
+                        restarting: t("settings.restarting"),
+                        restart: t("update.restartOk"),
+                        updateComponents: t("settings.updateComponents"),
+                      }}
                       onPrepareUpdates={onPrepareUpdates}
                       onApplyPreparedUpdate={() => onApplyPreparedUpdate({ serviceStatus: status })}
                     />
@@ -169,6 +184,8 @@ export function SettingsView(props: SettingsViewProps) {
                   <CheckUpdatesButton
                     disabled={isBusy}
                     isChecking={isCheckingUpdates}
+                    checkingLabel={t("settings.checking")}
+                    checkNowLabel={t("settings.checkNow")}
                     onCheckUpdates={onCheckUpdates}
                   />
                 </div>
@@ -176,34 +193,42 @@ export function SettingsView(props: SettingsViewProps) {
             </header>
 
             {activeSection === "general" ? (
-              <SettingsPanel title="启动">
+              <SettingsPanel title={t("settings.startup")}>
                 <ToggleRow
-                  label="登录时启动 Desktop"
-                  description="登录系统后自动启动 CliRelay Desktop"
+                  label={t("settings.launchAtLogin")}
+                  description={t("settings.launchAtLoginDescription")}
                   checked={draft.autoStartApp}
                   onChange={(autoStartApp) => onDraftChange({ autoStartApp })}
                 />
                 <ToggleRow
-                  label="启动后自动启动服务"
-                  description="打开应用后自动启动 CliRelay 服务"
-                  checked={draft.autoStartService}
-                  onChange={(autoStartService) => onDraftChange({ autoStartService })}
+                  label={t("settings.silentStart")}
+                  description={t("settings.silentStartDescription")}
+                  checked={draft.silentStart}
+                  onChange={(silentStart) => onDraftChange({ silentStart })}
                 />
-                <ToggleRow
-                  label="启动时打开管理面板"
-                  description="服务就绪后自动打开管理面板"
-                  checked={draft.openPanelOnStart}
-                  onChange={(openPanelOnStart) => onDraftChange({ openPanelOnStart })}
-                />
+                <FieldRow label={t("settings.language")}>
+                  <select
+                    className="settings-select"
+                    value={draft.locale}
+                    onChange={(event) =>
+                      onDraftChange({
+                        locale: event.currentTarget.value as DesktopLocale,
+                      })
+                    }
+                  >
+                    <option value="zh-CN">{localeLabels["zh-CN"]}</option>
+                    <option value="en">{localeLabels.en}</option>
+                  </select>
+                </FieldRow>
               </SettingsPanel>
             ) : null}
 
             {activeSection === "service" ? (
               <>
-                <SettingsPanel title="运行状态">
+                <SettingsPanel title={t("settings.runningStatus")}>
                   <dl className="field-list compact">
-                    <FieldRow label="状态" value={serviceStatusLabels[status]} />
-                    <FieldRow label="端口">
+                    <FieldRow label={t("settings.status")} value={serviceStatusLabel(status, locale)} />
+                    <FieldRow label={t("settings.port")}>
                       <input
                         className="port-input"
                         value={draft.portText}
@@ -212,12 +237,12 @@ export function SettingsView(props: SettingsViewProps) {
                         onChange={(event) => onDraftChange({ portText: event.currentTarget.value })}
                       />
                     </FieldRow>
-                    <FieldRow label="Desktop 版本" value={desktopVersion} mono />
-                    <FieldRow label="CliRelay 版本" value={serviceSnapshot?.clirelayVersion} mono />
+                    <FieldRow label={t("settings.desktopVersion")} value={desktopVersion} mono />
+                    <FieldRow label={t("settings.clirelayVersion")} value={serviceSnapshot?.clirelayVersion} mono />
                     {/* <FieldRow label="Sidecar SHA-256" value={serviceSnapshot?.sidecarSha256} mono /> */}
                   </dl>
                   {!canEditPort ? (
-                    <p className="hint">运行中、启动中、异常或外部占用状态下端口不可编辑。</p>
+                    <p className="hint">{t("settings.portLockedHint")}</p>
                   ) : null}
                   {portValidation && !portValidation.ok ? (
                     <p className="inline-error">{portValidation.message}</p>
@@ -225,10 +250,10 @@ export function SettingsView(props: SettingsViewProps) {
                 </SettingsPanel>
                 <div className="settings-actions">
                   <button type="button" className="secondary" onClick={() => void onOpenDataDirectory()}>
-                    打开数据目录
+                    {t("settings.openDataDirectory")}
                   </button>
                   <button type="button" className="secondary" onClick={() => void onOpenLogDirectory()}>
-                    打开日志目录
+                    {t("settings.openLogDirectory")}
                   </button>
                 </div>
               </>
@@ -238,10 +263,10 @@ export function SettingsView(props: SettingsViewProps) {
               <>
                 <section className="update-status-strip" aria-label="Update status">
                   <span>
-                    上次检查：<strong>{formatUpdateCheckTime(lastUpdateCheckAt)}</strong>
+                    {t("settings.lastChecked")}：<strong>{formatUpdateCheckTime(lastUpdateCheckAt, locale)}</strong>
                   </span>
                   <ToggleRow
-                    label="每日自动检查"
+                    label={t("settings.autoCheckDaily")}
                     checked={draft.autoCheckNewVersions}
                     onChange={(autoCheckNewVersions) => onDraftChange({ autoCheckNewVersions })}
                   />
@@ -250,32 +275,36 @@ export function SettingsView(props: SettingsViewProps) {
                 <section className="update-block" aria-labelledby="upstream-title">
                   <div className="update-block-header">
                     <div>
-                      <h3 id="upstream-title">上游组件</h3>
+                      <h3 id="upstream-title">{t("settings.upstreamComponents")}</h3>
                       <p>
                         {installResult?.message ??
                           componentPreparation?.message ??
                           updateResult?.upstream.message ??
-                          "尚未检查"}
+                          t("settings.notChecked")}
                       </p>
                     </div>
                   </div>
-                  <div className="component-update-table" role="table" aria-label="上游组件">
+                  <div className="component-update-table" role="table" aria-label={t("settings.upstreamComponents")}>
                     <div className="component-update-row component-update-head" role="row">
-                      <span role="columnheader">组件</span>
-                      <span role="columnheader">状态</span>
-                      <span role="columnheader">当前版本</span>
-                      <span role="columnheader">最新版本</span>
-                      <span role="columnheader">发布页</span>
+                      <span role="columnheader">{t("settings.component")}</span>
+                      <span role="columnheader">{t("settings.status")}</span>
+                      <span role="columnheader">{t("settings.currentVersion")}</span>
+                      <span role="columnheader">{t("settings.latestVersion")}</span>
+                      <span role="columnheader">{t("settings.releasePage")}</span>
                     </div>
                     <ComponentUpdateRow
                       name="CliRelay"
                       item={updateResult?.upstream.clirelay ?? null}
                       currentVersion={serviceSnapshot?.clirelayVersion ?? "unknown"}
+                      releasePageLabel={t("settings.releasePage")}
+                      statusLabel={(item) => componentUpdateStatusLabel(item, t)}
                     />
                     <ComponentUpdateRow
                       name="codeProxy"
                       item={updateResult?.upstream.codeProxy ?? null}
                       currentVersion={serviceSnapshot?.codeProxyVersion ?? "unknown"}
+                      releasePageLabel={t("settings.releasePage")}
+                      statusLabel={(item) => componentUpdateStatusLabel(item, t)}
                     />
                   </div>
                 </section>
@@ -283,17 +312,17 @@ export function SettingsView(props: SettingsViewProps) {
                 <section className="update-block desktop-preview-block" aria-labelledby="desktop-preview-title">
                   <div className="update-block-header">
                     <div>
-                      <h3 id="desktop-preview-title">桌面预览版</h3>
-                      <p>{updateResult?.desktop.message ?? "尚未检查"}</p>
+                      <h3 id="desktop-preview-title">{t("settings.desktopPreview")}</h3>
+                      <p>{updateResult?.desktop.message ?? t("settings.notChecked")}</p>
                     </div>
                   </div>
                   <div className="desktop-preview-summary">
                     <div>
-                      <span>当前版本</span>
+                      <span>{t("settings.currentVersion")}</span>
                       <strong>{desktopVersion}</strong>
                     </div>
                     <div>
-                      <span>最新版本</span>
+                      <span>{t("settings.latestVersion")}</span>
                       <strong>{updateResult?.desktop.latestVersion ?? "—"}</strong>
                     </div>
                     <button
@@ -319,16 +348,16 @@ export function SettingsView(props: SettingsViewProps) {
                   </div>
                   <div>
                     <h3>CliRelay Desktop</h3>
-                    <p>CliRelay Desktop 是独立的非官方桌面伴侣。</p>
+                    <p>{t("settings.aboutDescription")}</p>
                   </div>
                 </section>
-                <SettingsPanel title="产品">
+                <SettingsPanel title={t("settings.product")}>
                   <dl className="field-list compact">
-                    <FieldRow label="应用" value="CliRelay Desktop" />
-                    <FieldRow label="版本" value={desktopVersion} mono />
-                    <FieldRow label="渠道" value="预览版" />
-                    <FieldRow label="上游项目" value="CliRelay / codeProxy" />
-                    <FieldRow label="许可证" value="见 THIRD_PARTY_NOTICES.md" />
+                    <FieldRow label={t("settings.app")} value="CliRelay Desktop" />
+                    <FieldRow label={t("settings.desktopVersion")} value={desktopVersion} mono />
+                    <FieldRow label={t("settings.channel")} value={t("settings.previewChannel")} />
+                    <FieldRow label={t("settings.upstreamProjects")} value="CliRelay / codeProxy" />
+                    <FieldRow label={t("settings.license")} value={t("settings.licenseValue")} />
                   </dl>
                 </SettingsPanel>
               </>
@@ -353,11 +382,15 @@ interface ComponentUpdateRowProps {
   name: string;
   item: ComponentUpdateItem | null;
   currentVersion: string;
+  releasePageLabel: string;
+  statusLabel: (item: ComponentUpdateItem | null) => string;
 }
 
 interface CheckUpdatesButtonProps {
   disabled: boolean;
   isChecking: boolean;
+  checkingLabel: string;
+  checkNowLabel: string;
   onCheckUpdates: () => void | Promise<void>;
 }
 
@@ -366,6 +399,12 @@ interface ComponentUpdateActionButtonProps {
   isPreparing: boolean;
   isApplying: boolean;
   isReady: boolean;
+  labels: {
+    preparing: string;
+    restarting: string;
+    restart: string;
+    updateComponents: string;
+  };
   onPrepareUpdates: () => void | Promise<void>;
   onApplyPreparedUpdate: () => void | Promise<void>;
 }
@@ -373,6 +412,8 @@ interface ComponentUpdateActionButtonProps {
 function CheckUpdatesButton({
   disabled,
   isChecking,
+  checkingLabel,
+  checkNowLabel,
   onCheckUpdates,
 }: CheckUpdatesButtonProps) {
   return (
@@ -386,10 +427,10 @@ function CheckUpdatesButton({
       {isChecking ? (
         <>
           <span className="button-spinner" aria-hidden="true" />
-          <span>检查中...</span>
+          <span>{checkingLabel}</span>
         </>
       ) : (
-        "立即检查"
+        checkNowLabel
       )}
     </button>
   );
@@ -400,17 +441,18 @@ function ComponentUpdateActionButton({
   isPreparing,
   isApplying,
   isReady,
+  labels,
   onPrepareUpdates,
   onApplyPreparedUpdate,
 }: ComponentUpdateActionButtonProps) {
   const busy = isPreparing || isApplying;
   const label = isApplying
-    ? "重启中..."
+    ? labels.restarting
     : isPreparing
-      ? "准备中..."
+      ? labels.preparing
       : isReady
-        ? "重启"
-        : "更新组件";
+        ? labels.restart
+        : labels.updateComponents;
 
   return (
     <button
@@ -442,8 +484,10 @@ function ComponentUpdateRow({
   name,
   item,
   currentVersion,
+  releasePageLabel,
+  statusLabel,
 }: ComponentUpdateRowProps) {
-  const releaseLabel = item?.latestVersion ?? "发布页";
+  const releaseLabel = item?.latestVersion ?? releasePageLabel;
 
   return (
     <div className="component-update-row" role="row">
@@ -451,7 +495,7 @@ function ComponentUpdateRow({
       <span role="cell">
         <UpdateStatusPill
           status={item?.status ?? "Unavailable"}
-          label={componentUpdateStatusLabel(item)}
+          label={statusLabel(item)}
         />
       </span>
       <code role="cell">{item?.currentVersion ?? currentVersion}</code>
@@ -485,25 +529,48 @@ function UpdateStatusPill({
   return <span className={`update-status-pill status-${status.toLowerCase()}`}>{label}</span>;
 }
 
-function componentUpdateStatusLabel(item: ComponentUpdateItem | null): string {
+function componentUpdateStatusLabel(
+  item: ComponentUpdateItem | null,
+  t: (key: MessageKey) => string,
+): string {
   if (item?.message) {
     return item.message;
   }
 
-  return updateStatusLabel(item?.status ?? "Unavailable");
+  return updateStatusLabel(item?.status ?? "Unavailable", t);
 }
 
-function updateStatusLabel(status: UpdateStatus): string {
+function updateStatusLabel(status: UpdateStatus, t: (key: MessageKey) => string): string {
   switch (status) {
     case "UpdateAvailable":
-      return "有可用更新";
+      return t("update.statusAvailable");
     case "UpToDate":
-      return "已是最新";
+      return t("update.statusUpToDate");
     case "Error":
-      return "检查失败";
+      return t("update.statusError");
     case "Unavailable":
-      return "未检查";
+      return t("update.statusUnavailable");
   }
+}
+
+function settingsSectionLabel(
+  section: SettingsSectionId,
+  t: (key: MessageKey) => string,
+): string {
+  switch (section) {
+    case "general":
+      return t("settings.general");
+    case "service":
+      return t("settings.service");
+    case "update":
+      return t("settings.update");
+    case "about":
+      return t("settings.about");
+  }
+}
+
+function serviceStatusLabel(status: ServiceStatus, locale: DesktopLocale): string {
+  return locale === "en" ? serviceStatusLabelsEn[status] : serviceStatusLabels[status];
 }
 
 export function formatUpdateCheckTime(
@@ -512,12 +579,12 @@ export function formatUpdateCheckTime(
   timeZone?: string,
 ): string {
   if (!value) {
-    return "未检查";
+    return locale.startsWith("en") ? "Not checked" : "未检查";
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "未检查";
+    return locale.startsWith("en") ? "Not checked" : "未检查";
   }
 
   const options: Intl.DateTimeFormatOptions = {

@@ -14,9 +14,17 @@ pub const APP_DISPLAY_NAME: &str = "CliRelay Desktop";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_dialog::init());
+
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_autostart::init(
+        tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+        None,
+    ));
+
+    let app = builder
         .setup(bootstrap::setup)
         .on_window_event(windows::handle_window_event)
         .invoke_handler(tauri::generate_handler![
@@ -32,6 +40,9 @@ pub fn run() {
             commands::copy_v1_endpoint,
             commands::get_desktop_settings,
             commands::update_desktop_settings,
+            commands::get_management_secret_status,
+            commands::set_management_secret_key,
+            commands::quit_desktop,
             commands::check_for_updates,
             commands::get_component_update_preparation,
             commands::prepare_upstream_component_updates,

@@ -1,4 +1,5 @@
-import type { ServiceSnapshot } from "../bridge/types";
+import type { DesktopLocale, ServiceSnapshot } from "../bridge/types";
+import { tForLocale } from "../i18n/locales";
 import { FieldRow } from "./FieldRow";
 
 interface StatusViewProps {
@@ -15,6 +16,7 @@ interface StatusViewProps {
   onCopyEndpoint: () => void | Promise<void>;
   onChangePort: () => void | Promise<void>;
   onCancelExternal: () => void | Promise<void>;
+  locale?: DesktopLocale;
 }
 
 export function StatusView({
@@ -31,7 +33,9 @@ export function StatusView({
   onCopyEndpoint,
   onChangePort,
   onCancelExternal,
+  locale = "zh-CN",
 }: StatusViewProps) {
+  const t = (key: Parameters<typeof tForLocale>[1]) => tForLocale(locale, key);
   const canStart = !snapshot || ["Stopped", "Error"].includes(snapshot.status);
   const canStop = snapshot
     ? ["Running", "Unhealthy", "Stopping"].includes(snapshot.status)
@@ -44,37 +48,37 @@ export function StatusView({
     <main className="app-shell recovery-shell">
       <section className="shell-header">
         <div>
-          <p className="eyebrow">菜单 / Dock / 恢复状态</p>
+          <p className="eyebrow">{t("status.eyebrow")}</p>
           <h1>CliRelay Desktop</h1>
-          <p className="muted">服务未进入可打开 Panel 的状态时显示此页。</p>
+          <p className="muted">{t("status.description")}</p>
         </div>
         <button type="button" className="secondary" onClick={() => void onRefresh()}>
-          刷新
+          {t("status.refresh")}
         </button>
       </section>
 
       <section className="status-summary">
         <span className={`status-dot status-${snapshot?.status.toLowerCase() ?? "unknown"}`} />
         <div>
-          <span className="label">当前状态</span>
+          <span className="label">{t("status.title")}</span>
           <strong>{snapshot?.status ?? "Unknown"}</strong>
         </div>
       </section>
 
       <section className="surface split-layout">
         <dl className="field-list">
-          <FieldRow label="当前端口" value={snapshot?.port} mono />
+          <FieldRow label={t("status.currentPort")} value={snapshot?.port} mono />
           <FieldRow label="PID" value={snapshot?.pid ?? "—"} mono />
           <FieldRow label="Endpoint" value={snapshot?.endpoint} mono />
           <FieldRow label="Panel URL" value={snapshot?.panelUrl} mono />
-          <FieldRow label="归属" value={snapshot?.ownership} />
-          <FieldRow label="最近退出码" value={snapshot?.lastExitCode ?? "—"} mono />
-          <FieldRow label="错误摘要" value={snapshot?.lastError ?? error ?? "—"} />
+          <FieldRow label={t("status.ownership")} value={snapshot?.ownership} />
+          <FieldRow label={t("status.lastExitCode")} value={snapshot?.lastExitCode ?? "—"} mono />
+          <FieldRow label={t("status.errorSummary")} value={snapshot?.lastError ?? error ?? "—"} />
         </dl>
 
         <div className="action-stack">
           <button type="button" onClick={() => void onOpenPanel()} disabled={isBusy}>
-            重试打开 Panel
+            {t("status.openPanel")}
           </button>
           <button
             type="button"
@@ -82,7 +86,7 @@ export function StatusView({
             onClick={() => void onStart()}
             disabled={isBusy || !canStart}
           >
-            启动服务
+            {t("status.start")}
           </button>
           <button
             type="button"
@@ -90,7 +94,7 @@ export function StatusView({
             onClick={() => void onStop()}
             disabled={isBusy || !canStop}
           >
-            停止服务
+            {t("status.stop")}
           </button>
           <button
             type="button"
@@ -98,16 +102,16 @@ export function StatusView({
             onClick={() => void onRestart()}
             disabled={isBusy || !canRestart}
           >
-            重启服务
+            {t("status.restart")}
           </button>
           <button type="button" className="ghost" onClick={() => void onCopyEndpoint()}>
-            复制 API Base URL
+            {t("status.copyEndpoint")}
           </button>
           <button type="button" className="ghost" onClick={() => void onOpenDataDirectory()}>
-            打开数据目录
+            {t("settings.openDataDirectory")}
           </button>
           <button type="button" className="ghost" onClick={() => void onOpenLogDirectory()}>
-            打开日志目录
+            {t("settings.openLogDirectory")}
           </button>
         </div>
       </section>
@@ -115,20 +119,18 @@ export function StatusView({
       {snapshot?.status === "External" ? (
         <section className="surface external-choice">
           <div>
-            <h2>检测到外部 CliRelay 服务</h2>
-            <p className="muted">
-              当前端口已有可连接服务。可以连接现有服务，或进入设置更改 Desktop 端口。
-            </p>
+            <h2>{t("status.externalTitle")}</h2>
+            <p className="muted">{t("status.externalDescription")}</p>
           </div>
           <div className="button-row">
             <button type="button" onClick={() => void onOpenPanel()}>
-              连接现有服务
+              {t("status.connectExisting")}
             </button>
             <button type="button" className="secondary" onClick={() => void onChangePort()}>
-              更改端口
+              {t("status.changePort")}
             </button>
             <button type="button" className="ghost" onClick={() => void onCancelExternal()}>
-              取消
+              {t("status.cancel")}
             </button>
           </div>
         </section>

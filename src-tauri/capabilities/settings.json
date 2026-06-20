@@ -9,6 +9,9 @@
     "core:window:default",
     "opener:allow-open-url",
     "opener:allow-default-urls",
-    "dialog:allow-message"
+    "dialog:allow-message",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

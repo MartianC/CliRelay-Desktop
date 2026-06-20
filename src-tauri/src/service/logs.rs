@@ -40,6 +40,7 @@ pub fn redact_log_line(input: &str) -> String {
         RedactionRule::new("api-key:", "api-key: [REDACTED]"),
         RedactionRule::new("cookie:", "cookie: [REDACTED]"),
         RedactionRule::new("oauth_token=", "oauth_token=[REDACTED]"),
+        RedactionRule::new("secret-key:", "secret-key: [REDACTED]"),
     ];
 
     let mut redacted = input.to_string();
@@ -204,6 +205,11 @@ mod tests {
         assert_eq!(redact_log_line("api-key: abc"), "api-key: [REDACTED]");
         assert_eq!(redact_log_line("cookie: abc"), "cookie: [REDACTED]");
         assert_eq!(redact_log_line("oauth_token=abc"), "oauth_token=[REDACTED]");
+    }
+
+    #[test]
+    fn redacts_management_secret_key() {
+        assert_eq!(redact_log_line("secret-key: abc"), "secret-key: [REDACTED]");
     }
 
     #[test]

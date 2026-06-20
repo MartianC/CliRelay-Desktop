@@ -7,6 +7,7 @@ import {
   shouldAutoCheckUpdates,
   toSettingsPatch,
   validateServicePort,
+  type SettingsCommands,
 } from "./settingsStore";
 import type {
   ComponentUpdatePreparationSnapshot,
@@ -24,6 +25,7 @@ const loadedSettings: DesktopSettings = {
   autoCheckNewVersions: false,
   lastUpdateCheckAt: null,
   lastUpdateCheckResult: null,
+  locale: "zh-CN",
 };
 
 describe("settings store helpers", () => {
@@ -60,6 +62,24 @@ describe("settings store helpers", () => {
     expect(toSettingsPatch(loadedSettings, draft)).toEqual({
       autoStartApp: true,
       port: 8320,
+    });
+  });
+
+  test("静默启动反向生成 openPanelOnStart patch", () => {
+    const draft = createPortDraft({ ...loadedSettings, openPanelOnStart: true });
+    draft.silentStart = true;
+
+    expect(toSettingsPatch({ ...loadedSettings, openPanelOnStart: true }, draft)).toEqual({
+      openPanelOnStart: false,
+    });
+  });
+
+  test("locale 变化生成设置 patch", () => {
+    const draft = createPortDraft({ ...loadedSettings, locale: "zh-CN" });
+    draft.locale = "en";
+
+    expect(toSettingsPatch({ ...loadedSettings, locale: "zh-CN" }, draft)).toEqual({
+      locale: "en",
     });
   });
 
@@ -106,13 +126,7 @@ describe("settings store helpers", () => {
       ...patch,
     }));
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => loadedSettings),
-      updateDesktopSettings,
-      checkForUpdates: vi.fn(),
-      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
-      prepareUpstreamComponentUpdates: vi.fn(),
-      applyPreparedComponentUpdates: vi.fn(),
-      confirmPreparedComponentUpdateRestart: vi.fn(),
+      ...testSettingsCommands({ updateDesktopSettings }),
     });
 
     await store.load();
@@ -131,13 +145,7 @@ describe("settings store helpers", () => {
       ...patch,
     }));
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => loadedSettings),
-      updateDesktopSettings,
-      checkForUpdates: vi.fn(),
-      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
-      prepareUpstreamComponentUpdates: vi.fn(),
-      applyPreparedComponentUpdates: vi.fn(),
-      confirmPreparedComponentUpdateRestart: vi.fn(),
+      ...testSettingsCommands({ updateDesktopSettings }),
     });
 
     await store.load();
@@ -158,17 +166,11 @@ describe("settings store helpers", () => {
         }),
     );
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => loadedSettings),
-      updateDesktopSettings,
-      checkForUpdates: vi.fn(),
-      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
-      prepareUpstreamComponentUpdates: vi.fn(),
-      applyPreparedComponentUpdates: vi.fn(),
-      confirmPreparedComponentUpdateRestart: vi.fn(),
+      ...testSettingsCommands({ updateDesktopSettings }),
     });
 
     await store.load();
-    store.setDraft({ autoStartApp: true });
+    store.setDraft({ autoCheckNewVersions: true });
     expect(store.getState().isBusy).toBe(true);
 
     store.setDraft({ portText: "8" });
@@ -179,25 +181,83 @@ describe("settings store helpers", () => {
       expect(store.getState().isBusy).toBe(false);
     });
 
-    expect(store.getState().settings?.autoStartApp).toBe(true);
-    expect(store.getState().draft?.autoStartApp).toBe(true);
+    expect(store.getState().settings?.autoCheckNewVersions).toBe(true);
+    expect(store.getState().draft?.autoCheckNewVersions).toBe(true);
     expect(store.getState().draft?.portText).toBe("8");
+  });
+
+  test("autoStartApp 变更后同步系统登录项", async () => {
+    const setAutoStartAppEnabled = vi.fn(async () => undefined);
+    const store = createSettingsStore({
+      ...testSettingsCommands({
+        getAutoStartAppEnabled: vi.fn(async () => false),
+        setAutoStartAppEnabled,
+      }),
+    });
+
+    await store.load();
+    store.setDraft({ autoStartApp: true });
+
+    await vi.waitFor(() => {
+      expect(setAutoStartAppEnabled).toHaveBeenCalledWith(true);
+    });
+  });
+
+  test("autoStartApp 系统调用失败时不保存 settings", async () => {
+    const updateDesktopSettings = vi.fn();
+    const store = createSettingsStore({
+      ...testSettingsCommands({
+        getAutoStartAppEnabled: vi.fn(async () => false),
+        setAutoStartAppEnabled: vi.fn(async () => {
+          throw new Error("permission denied");
+        }),
+        updateDesktopSettings,
+      }),
+    });
+
+    await store.load();
+    store.setDraft({ autoStartApp: true });
+
+    await vi.waitFor(() => {
+      expect(store.getState().error).toContain("登录时启动设置失败");
+    });
+    expect(updateDesktopSettings).not.toHaveBeenCalled();
+    expect(store.getState().draft?.autoStartApp).toBe(false);
+  });
+
+  test("settings 保存失败时回滚系统登录项", async () => {
+    const setAutoStartAppEnabled = vi.fn(async () => undefined);
+    const store = createSettingsStore({
+      ...testSettingsCommands({
+        getAutoStartAppEnabled: vi.fn(async () => false),
+        setAutoStartAppEnabled,
+        updateDesktopSettings: vi.fn(async () => {
+          throw new Error("settings write failed");
+        }),
+      }),
+    });
+
+    await store.load();
+    store.setDraft({ autoStartApp: true });
+
+    await vi.waitFor(() => {
+      expect(store.getState().error).toContain("登录时启动设置失败");
+    });
+    expect(setAutoStartAppEnabled).toHaveBeenNthCalledWith(1, true);
+    expect(setAutoStartAppEnabled).toHaveBeenNthCalledWith(2, false);
+    expect(store.getState().draft?.autoStartApp).toBe(false);
   });
 
   test("加载设置时恢复上一次更新检查结果", async () => {
     const cachedResult = updateResult("Both");
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => ({
+      ...testSettingsCommands({
+        getDesktopSettings: vi.fn(async () => ({
         ...loadedSettings,
         lastUpdateCheckAt: cachedResult.checkedAt,
         lastUpdateCheckResult: cachedResult,
-      })),
-      updateDesktopSettings: vi.fn(),
-      checkForUpdates: vi.fn(),
-      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
-      prepareUpstreamComponentUpdates: vi.fn(),
-      applyPreparedComponentUpdates: vi.fn(),
-      confirmPreparedComponentUpdateRestart: vi.fn(),
+        })),
+      }),
     });
 
     await store.load();
@@ -207,20 +267,18 @@ describe("settings store helpers", () => {
 
   test("load 时恢复已准备好的组件更新状态", async () => {
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => loadedSettings),
-      updateDesktopSettings: vi.fn(),
-      checkForUpdates: vi.fn(async () => updateResult("Both")),
-      getComponentUpdatePreparation: vi.fn(async () => ({
+      ...testSettingsCommands({
+        checkForUpdates: vi.fn(async () => updateResult("Both")),
+        getComponentUpdatePreparation: vi.fn(async () => ({
         status: "Ready" as const,
         installScope: "Both" as const,
         message: "组件更新已准备好，点击重启完成替换",
         startedAt: "2026-06-18T10:00:00Z",
         finishedAt: "2026-06-18T10:01:00Z",
         error: null,
-      })),
-      prepareUpstreamComponentUpdates: vi.fn(),
-      applyPreparedComponentUpdates: vi.fn(),
-      confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+        })),
+        confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+      }),
     });
 
     await store.load();
@@ -241,13 +299,12 @@ describe("settings store helpers", () => {
     const applyPreparedComponentUpdates = vi.fn();
     const confirmPreparedComponentUpdateRestart = vi.fn(async () => true);
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => loadedSettings),
-      updateDesktopSettings: vi.fn(),
-      checkForUpdates: vi.fn(async () => updateResult("CliRelay")),
-      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
-      prepareUpstreamComponentUpdates,
-      applyPreparedComponentUpdates,
-      confirmPreparedComponentUpdateRestart,
+      ...testSettingsCommands({
+        checkForUpdates: vi.fn(async () => updateResult("CliRelay")),
+        prepareUpstreamComponentUpdates,
+        applyPreparedComponentUpdates,
+        confirmPreparedComponentUpdateRestart,
+      }),
     });
 
     await store.load();
@@ -270,13 +327,11 @@ describe("settings store helpers", () => {
         }),
     );
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => loadedSettings),
-      updateDesktopSettings: vi.fn(),
-      checkForUpdates: vi.fn(async () => updateResult("Both")),
-      getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
-      prepareUpstreamComponentUpdates,
-      applyPreparedComponentUpdates: vi.fn(),
-      confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+      ...testSettingsCommands({
+        checkForUpdates: vi.fn(async () => updateResult("Both")),
+        prepareUpstreamComponentUpdates,
+        confirmPreparedComponentUpdateRestart: vi.fn(async () => true),
+      }),
     });
 
     await store.load();
@@ -306,20 +361,19 @@ describe("settings store helpers", () => {
   test("用户取消重启确认时不应用已准备好的组件更新", async () => {
     const applyPreparedComponentUpdates = vi.fn();
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => loadedSettings),
-      updateDesktopSettings: vi.fn(),
-      checkForUpdates: vi.fn(async () => updateResult("Both")),
-      getComponentUpdatePreparation: vi.fn(async () => ({
+      ...testSettingsCommands({
+        checkForUpdates: vi.fn(async () => updateResult("Both")),
+        getComponentUpdatePreparation: vi.fn(async () => ({
         status: "Ready" as const,
         installScope: "Both" as const,
         message: "组件更新已准备好，点击重启完成替换",
         startedAt: "2026-06-18T10:00:00Z",
         finishedAt: "2026-06-18T10:01:00Z",
         error: null,
-      })),
-      prepareUpstreamComponentUpdates: vi.fn(),
-      applyPreparedComponentUpdates,
-      confirmPreparedComponentUpdateRestart: vi.fn(async () => false),
+        })),
+        applyPreparedComponentUpdates,
+        confirmPreparedComponentUpdateRestart: vi.fn(async () => false),
+      }),
     });
 
     await store.load();
@@ -337,20 +391,19 @@ describe("settings store helpers", () => {
     }));
     const confirmPreparedComponentUpdateRestart = vi.fn(async () => true);
     const store = createSettingsStore({
-      getDesktopSettings: vi.fn(async () => loadedSettings),
-      updateDesktopSettings: vi.fn(),
-      checkForUpdates: vi.fn(async () => updateResult("Both")),
-      getComponentUpdatePreparation: vi.fn(async () => ({
+      ...testSettingsCommands({
+        checkForUpdates: vi.fn(async () => updateResult("Both")),
+        getComponentUpdatePreparation: vi.fn(async () => ({
         status: "Ready" as const,
         installScope: "Both" as const,
         message: "组件更新已准备好，点击重启完成替换",
         startedAt: "2026-06-18T10:00:00Z",
         finishedAt: "2026-06-18T10:01:00Z",
         error: null,
-      })),
-      prepareUpstreamComponentUpdates: vi.fn(),
-      applyPreparedComponentUpdates,
-      confirmPreparedComponentUpdateRestart,
+        })),
+        applyPreparedComponentUpdates,
+        confirmPreparedComponentUpdateRestart,
+      }),
     });
 
     await store.load();
@@ -359,12 +412,28 @@ describe("settings store helpers", () => {
     expect(confirmPreparedComponentUpdateRestart).toHaveBeenCalledWith({
       installScope: "Both",
       serviceStatus: "Running",
+      locale: "zh-CN",
     });
     expect(applyPreparedComponentUpdates).toHaveBeenCalledTimes(1);
     expect(store.getState().installResult?.status).toBe("Applied");
     expect(store.getState().componentPreparation).toBeNull();
   });
 });
+
+function testSettingsCommands(overrides: Partial<SettingsCommands> = {}): SettingsCommands {
+  return {
+    getDesktopSettings: vi.fn(async () => loadedSettings),
+    updateDesktopSettings: vi.fn(async (patch) => ({ ...loadedSettings, ...patch })),
+    checkForUpdates: vi.fn(),
+    getComponentUpdatePreparation: vi.fn(async () => idlePreparation()),
+    prepareUpstreamComponentUpdates: vi.fn(),
+    applyPreparedComponentUpdates: vi.fn(),
+    confirmPreparedComponentUpdateRestart: vi.fn(),
+    getAutoStartAppEnabled: vi.fn(async () => loadedSettings.autoStartApp),
+    setAutoStartAppEnabled: vi.fn(async () => undefined),
+    ...overrides,
+  };
+}
 
 function idlePreparation(): ComponentUpdatePreparationSnapshot {
   return {

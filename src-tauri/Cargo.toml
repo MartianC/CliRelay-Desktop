@@ -30,3 +30,6 @@ tar = "0.4"
 flate2 = "1"
 zip = "2"
 tauri-plugin-dialog = "2"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-autostart = "2.5.1"

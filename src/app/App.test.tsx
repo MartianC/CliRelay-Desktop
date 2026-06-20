@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   StartupShell,
   shouldAutoStartService,
+  shouldHideShellAfterSilentStartup,
   shouldOpenPanelAfterStartup,
 } from "./App";
 
@@ -62,8 +63,24 @@ describe("shouldAutoStartService", () => {
         snapshotStatus: "Stopped",
         statusRequested: false,
         windowRole: "main",
+        secretGateState: "configured",
       }),
     ).toBe(true);
+  });
+
+  test("密钥门禁未完成时不自动启动服务", () => {
+    expect(
+      shouldAutoStartService({
+        hasAttemptedAutoStart: false,
+        isBusy: false,
+        panelOpened: false,
+        panelOpening: false,
+        snapshotStatus: "Stopped",
+        statusRequested: false,
+        windowRole: "main",
+        secretGateState: "checking",
+      }),
+    ).toBe(false);
   });
 
   test("非 Stopped 或已经尝试启动时不重复自动启动", () => {
@@ -76,6 +93,7 @@ describe("shouldAutoStartService", () => {
         snapshotStatus: "Stopped",
         statusRequested: false,
         windowRole: "main",
+        secretGateState: "configured",
       }),
     ).toBe(false);
     expect(
@@ -87,6 +105,7 @@ describe("shouldAutoStartService", () => {
         snapshotStatus: "Starting",
         statusRequested: false,
         windowRole: "main",
+        secretGateState: "configured",
       }),
     ).toBe(false);
   });
@@ -99,8 +118,20 @@ describe("shouldOpenPanelAfterStartup", () => {
         panelOpened: false,
         panelOpening: false,
         snapshotStatus: "Running",
+        openPanelOnStart: true,
       }),
     ).toBe(true);
+  });
+
+  test("静默启动时不自动打开 Panel", () => {
+    expect(
+      shouldOpenPanelAfterStartup({
+        panelOpened: false,
+        panelOpening: false,
+        snapshotStatus: "Running",
+        openPanelOnStart: false,
+      }),
+    ).toBe(false);
   });
 
   test("Panel 已经打开或正在打开时不重复触发", () => {
@@ -109,6 +140,7 @@ describe("shouldOpenPanelAfterStartup", () => {
         panelOpened: true,
         panelOpening: false,
         snapshotStatus: "Running",
+        openPanelOnStart: true,
       }),
     ).toBe(false);
     expect(
@@ -116,7 +148,22 @@ describe("shouldOpenPanelAfterStartup", () => {
         panelOpened: false,
         panelOpening: true,
         snapshotStatus: "Running",
+        openPanelOnStart: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("shouldHideShellAfterSilentStartup", () => {
+  test("静默启动服务就绪后隐藏 shell", () => {
+    expect(
+      shouldHideShellAfterSilentStartup({
+        hasHiddenShell: false,
+        openPanelOnStart: false,
+        snapshotStatus: "Running",
+        windowRole: "main",
+        statusRequested: false,
+      }),
+    ).toBe(true);
   });
 });

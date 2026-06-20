@@ -983,6 +983,61 @@ h2 {
   width: 120px;
 }
 
+.settings-select {
+  appearance: auto;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #243041;
+  min-height: 36px;
+  padding: 6px 10px;
+  width: min(220px, 100%);
+}
+
+.secret-dialog-backdrop {
+  align-items: center;
+  background: rgb(15 23 42 / 0.32);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 20;
+}
+
+.secret-dialog {
+  background: #ffffff;
+  border: 1px solid rgb(15 23 42 / 0.08);
+  border-radius: 8px;
+  box-shadow: 0 22px 60px rgb(15 23 42 / 0.22);
+  display: grid;
+  gap: 14px;
+  max-width: 420px;
+  padding: 22px;
+  width: 100%;
+}
+
+.secret-dialog h2 {
+  color: #111827;
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.secret-dialog label {
+  color: #344054;
+  display: grid;
+  font-size: 0.86rem;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.secret-dialog input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
 .link-button {
   background: transparent;
   border: 0;
