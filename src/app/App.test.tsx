@@ -119,8 +119,21 @@ describe("shouldOpenPanelAfterStartup", () => {
         panelOpening: false,
         snapshotStatus: "Running",
         openPanelOnStart: true,
+        secretGateState: "configured",
       }),
     ).toBe(true);
+  });
+
+  test("管理密钥未配置时不提前消耗打开 Panel 请求", () => {
+    expect(
+      shouldOpenPanelAfterStartup({
+        panelOpened: false,
+        panelOpening: false,
+        snapshotStatus: "Running",
+        openPanelOnStart: true,
+        secretGateState: "missing",
+      }),
+    ).toBe(false);
   });
 
   test("静默启动时不自动打开 Panel", () => {
@@ -130,6 +143,7 @@ describe("shouldOpenPanelAfterStartup", () => {
         panelOpening: false,
         snapshotStatus: "Running",
         openPanelOnStart: false,
+        secretGateState: "configured",
       }),
     ).toBe(false);
   });
@@ -141,6 +155,7 @@ describe("shouldOpenPanelAfterStartup", () => {
         panelOpening: false,
         snapshotStatus: "Running",
         openPanelOnStart: true,
+        secretGateState: "configured",
       }),
     ).toBe(false);
     expect(
@@ -149,6 +164,7 @@ describe("shouldOpenPanelAfterStartup", () => {
         panelOpening: true,
         snapshotStatus: "Running",
         openPanelOnStart: true,
+        secretGateState: "configured",
       }),
     ).toBe(false);
   });

@@ -397,11 +397,6 @@ h2 {
   color: #182230;
 }
 
-.recovery-shell {
-  display: grid;
-  gap: 18px;
-}
-
 .shell-header {
   align-items: center;
 }
@@ -605,7 +600,7 @@ h2 {
   overflow: hidden;
 }
 
-.settings-section h3 {
+.settings-section > h3 {
   border-bottom: 1px solid #e7edf4;
   color: #253145;
   font-size: 0.92rem;
@@ -880,6 +875,16 @@ h2 {
   width: 58px;
 }
 
+.settings-about-card .app-icon-image {
+  border-radius: 13px;
+  box-shadow:
+    0 10px 22px rgb(31 41 51 / 0.12),
+    0 0 0 1px rgb(15 23 42 / 0.08);
+  display: block;
+  height: 58px;
+  width: 58px;
+}
+
 .settings-about-card h3 {
   color: #182230;
   font-size: 1.15rem;
@@ -891,7 +896,8 @@ h2 {
   margin: 0;
 }
 
-.toggle-row {
+.toggle-row,
+.settings-select-row {
   align-items: center;
   border-top: 1px solid #edf2f7;
   display: flex;
@@ -902,25 +908,34 @@ h2 {
   position: relative;
 }
 
-.toggle-row:first-child {
+.toggle-row:first-child,
+.settings-select-row:first-child {
   border-top: 0;
 }
 
 .toggle-row strong,
-.toggle-row small {
+.toggle-row small,
+.settings-select-row strong,
+.settings-select-row small {
   display: block;
 }
 
-.toggle-row strong {
+.toggle-row strong,
+.settings-select-row strong {
   color: #243041;
   font-size: 0.9rem;
 }
 
-.toggle-row small {
+.toggle-row small,
+.settings-select-row small {
   color: #667085;
   font-size: 0.78rem;
   font-weight: 500;
   margin-top: 2px;
+}
+
+.settings-select-row > span {
+  min-width: 0;
 }
 
 .toggle-input {
@@ -994,6 +1009,38 @@ h2 {
   width: min(220px, 100%);
 }
 
+.settings-select-row .settings-select {
+  flex: 0 0 min(220px, 42%);
+}
+
+.status-settings-content {
+  margin: 0 auto;
+  max-width: 880px;
+  padding-top: 24px;
+  width: 100%;
+}
+
+.status-summary-section .status-summary {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 15px;
+}
+
+.status-summary-section .status-summary strong {
+  color: #182230;
+}
+
+.status-settings-content .split-layout {
+  box-shadow: none;
+}
+
+.external-choice h3 {
+  color: #253145;
+  font-size: 0.92rem;
+  margin: 0;
+}
+
 .secret-dialog-backdrop {
   align-items: center;
   background: rgb(15 23 42 / 0.32);
@@ -1006,24 +1053,21 @@ h2 {
 }
 
 .secret-dialog {
-  background: #ffffff;
-  border: 1px solid rgb(15 23 42 / 0.08);
-  border-radius: 8px;
   box-shadow: 0 22px 60px rgb(15 23 42 / 0.22);
-  display: grid;
-  gap: 14px;
   max-width: 420px;
-  padding: 22px;
   width: 100%;
 }
 
-.secret-dialog h2 {
-  color: #111827;
-  font-size: 1.15rem;
+.secret-dialog-body {
+  gap: 14px;
+  padding: 16px;
+}
+
+.secret-dialog-body > .muted {
   margin: 0;
 }
 
-.secret-dialog label {
+.secret-field-row {
   color: #344054;
   display: grid;
   font-size: 0.86rem;
@@ -1031,11 +1075,23 @@ h2 {
   gap: 6px;
 }
 
+.secret-field-row span {
+  font-weight: 700;
+}
+
 .secret-dialog input {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   min-height: 38px;
   padding: 8px 10px;
+}
+
+.secret-dialog .inline-error {
+  margin: 0;
+}
+
+.secret-dialog-actions {
+  justify-content: flex-end;
 }
 
 .link-button {
@@ -1071,6 +1127,16 @@ h2 {
 
   .split-layout {
     grid-template-columns: 1fr;
+  }
+
+  .settings-select-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-select-row .settings-select {
+    flex-basis: auto;
+    width: 100%;
   }
 
   .field-row {

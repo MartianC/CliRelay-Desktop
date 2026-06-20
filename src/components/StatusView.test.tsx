@@ -46,5 +46,9 @@ describe("StatusView", () => {
     expect(html).toContain("连接现有服务");
     expect(html).toContain("更改端口");
     expect(html).toContain("取消");
+    expect(html).toContain("settings-shell");
+    expect(html).toContain("settings-content");
+    expect(html).toContain("settings-section");
+    expect(html).not.toContain("recovery-shell");
   });
 });

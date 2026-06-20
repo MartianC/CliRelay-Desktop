@@ -155,6 +155,7 @@ function App() {
         panelOpening: service.panelOpening,
         snapshotStatus: service.snapshot?.status ?? null,
         openPanelOnStart: settings.settings.openPanelOnStart,
+        secretGateState,
       })
     ) {
       return;
@@ -169,6 +170,7 @@ function App() {
     service.panelOpening,
     service.snapshot?.status,
     settings.settings,
+    secretGateState,
     statusRequested,
     windowRole,
   ]);
@@ -437,6 +439,7 @@ interface OpenPanelAfterStartupInput {
   panelOpening: boolean;
   snapshotStatus: string | null;
   openPanelOnStart: boolean;
+  secretGateState: SecretGateState;
 }
 
 export function shouldOpenPanelAfterStartup({
@@ -444,8 +447,15 @@ export function shouldOpenPanelAfterStartup({
   panelOpening,
   snapshotStatus,
   openPanelOnStart,
+  secretGateState,
 }: OpenPanelAfterStartupInput): boolean {
-  return openPanelOnStart && !panelOpening && !panelOpened && snapshotStatus === "Running";
+  return (
+    secretGateState === "configured" &&
+    openPanelOnStart &&
+    !panelOpening &&
+    !panelOpened &&
+    snapshotStatus === "Running"
+  );
 }
 
 export function shouldHideShellAfterSilentStartup(input: {

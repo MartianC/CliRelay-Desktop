@@ -19,5 +19,8 @@ describe("ManagementSecretDialog", () => {
     expect(html).toContain("确认");
     expect(html).toContain("取消");
     expect(html).toContain('type="password"');
+    expect(html).toContain("settings-section");
+    expect(html).toContain("settings-section-body");
+    expect(html).toContain("secret-field-row");
   });
 });

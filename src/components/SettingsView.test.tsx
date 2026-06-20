@@ -84,6 +84,8 @@ describe("SettingsView", () => {
     expect(html).toContain("语言");
     expect(html).toContain("中文");
     expect(html).toContain("English");
+    expect(html).toContain("settings-select-row");
+    expect(html).toContain("切换 Desktop 与管理面板语言");
     expect(html).not.toContain("启动后自动启动服务");
     expect(html).not.toContain("启动时打开管理面板");
     expect(html).toContain('class="toggle-control"');
@@ -178,6 +180,9 @@ describe("SettingsView", () => {
 
     expect(html).not.toContain("0.0.1-preview.1");
     expect(html).toContain("正在读取版本");
+    expect(html).toContain("app-icon-image");
+    expect(html).toContain("/Untitled-macOS-Dark-1024@1x.png");
+    expect(html).not.toContain("terminal-mark");
   });
 
   test("准备中时更新按钮显示 spinner 和准备中文案", () => {

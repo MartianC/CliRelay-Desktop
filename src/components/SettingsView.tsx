@@ -206,7 +206,11 @@ export function SettingsView(props: SettingsViewProps) {
                   checked={draft.silentStart}
                   onChange={(silentStart) => onDraftChange({ silentStart })}
                 />
-                <FieldRow label={t("settings.language")}>
+                <label className="settings-select-row">
+                  <span>
+                    <strong>{t("settings.language")}</strong>
+                    <small>{t("settings.languageDescription")}</small>
+                  </span>
                   <select
                     className="settings-select"
                     value={draft.locale}
@@ -219,7 +223,7 @@ export function SettingsView(props: SettingsViewProps) {
                     <option value="zh-CN">{localeLabels["zh-CN"]}</option>
                     <option value="en">{localeLabels.en}</option>
                   </select>
-                </FieldRow>
+                </label>
               </SettingsPanel>
             ) : null}
 
@@ -342,10 +346,12 @@ export function SettingsView(props: SettingsViewProps) {
             {activeSection === "about" ? (
               <>
                 <section className="settings-about-card">
-                  <div className="startup-app-icon" aria-hidden="true">
-                    <span className="terminal-mark">&gt;_</span>
-                    <span className="icon-status-dot status-running" />
-                  </div>
+                  <img
+                    className="app-icon-image"
+                    src="/Untitled-macOS-Dark-1024@1x.png"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <div>
                     <h3>CliRelay Desktop</h3>
                     <p>{t("settings.aboutDescription")}</p>
