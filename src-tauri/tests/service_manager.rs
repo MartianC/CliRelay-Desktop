@@ -19,7 +19,8 @@ fn start_service_waits_for_delayed_panel_ready() {
     let fixture = ManagerFixture::new("delayed-ready");
     let sidecar = compile_mock_sidecar(fixture.path());
     let port = free_local_port();
-    let mut manager = ServiceManager::new(fixture.manager_config(&sidecar, port, "run", 150));
+    let mut manager =
+        ServiceManager::new(fixture.manager_config_with_config(&sidecar, port, "run", 150));
 
     let snapshot = manager.start_service().expect("服务应启动成功");
 
@@ -43,7 +44,8 @@ fn start_service_records_error_when_sidecar_exits_immediately() {
     let fixture = ManagerFixture::new("immediate-exit");
     let sidecar = compile_mock_sidecar(fixture.path());
     let port = free_local_port();
-    let mut manager = ServiceManager::new(fixture.manager_config(&sidecar, port, "exit", 0));
+    let mut manager =
+        ServiceManager::new(fixture.manager_config_with_config(&sidecar, port, "exit", 0));
 
     let error = manager.start_service().expect_err("立即退出应返回错误");
     let snapshot = manager.snapshot();
@@ -59,7 +61,8 @@ fn stop_service_terminates_sidecar_and_frees_port() {
     let fixture = ManagerFixture::new("stop-frees-port");
     let sidecar = compile_mock_sidecar(fixture.path());
     let port = free_local_port();
-    let mut manager = ServiceManager::new(fixture.manager_config(&sidecar, port, "run", 0));
+    let mut manager =
+        ServiceManager::new(fixture.manager_config_with_config(&sidecar, port, "run", 0));
     manager.start_service().expect("服务应启动成功");
 
     let snapshot = manager.stop_service().expect("服务应停止成功");
@@ -95,7 +98,8 @@ fn start_service_rebuilds_missing_runtime_sidecar_and_launches_runtime_executabl
     let fixture = ManagerFixture::new("runtime-sidecar-rebuild");
     let bundled_sidecar = compile_mock_sidecar(fixture.path());
     let port = free_local_port();
-    let mut manager = ServiceManager::new(fixture.manager_config(&bundled_sidecar, port, "run", 0));
+    let mut manager =
+        ServiceManager::new(fixture.manager_config_with_config(&bundled_sidecar, port, "run", 0));
 
     assert!(!fixture.paths.runtime_sidecar_executable.exists());
 
@@ -125,13 +129,18 @@ fn start_service_rebuilds_missing_runtime_sidecar_and_launches_runtime_executabl
 }
 
 #[test]
-fn start_service_rebuilds_missing_panel_and_config_before_launch() {
+fn start_service_rebuilds_missing_panel_when_config_exists_before_launch() {
     let fixture = ManagerFixture::new("runtime-panel-config-rebuild");
     let bundled_sidecar = compile_mock_sidecar(fixture.path());
     let port = free_local_port();
     let mut manager = ServiceManager::new(fixture.manager_config(&bundled_sidecar, port, "run", 0));
 
-    assert!(!fixture.paths.config_file.exists());
+    fs::create_dir_all(&fixture.paths.runtime_dir).expect("创建 runtime 目录失败");
+    fs::write(
+        &fixture.paths.config_file,
+        format!("host: \"\"\nport: {port}\n"),
+    )
+    .expect("写入 runtime config 失败");
     assert!(!fixture.paths.panel_dir.join("manage.html").exists());
 
     let snapshot = manager.start_service().expect("服务应启动成功");
@@ -144,11 +153,25 @@ fn start_service_rebuilds_missing_panel_and_config_before_launch() {
 }
 
 #[test]
+fn start_service_fails_when_runtime_config_is_missing() {
+    let fixture = ManagerFixture::new("missing-config-start");
+    let bundled_sidecar = compile_mock_sidecar(fixture.path());
+    let port = free_local_port();
+    let mut manager = ServiceManager::new(fixture.manager_config(&bundled_sidecar, port, "run", 0));
+
+    let error = manager.start_service().expect_err("缺少 runtime config 时不应启动服务");
+
+    assert!(matches!(error, ManagerError::RuntimeResources(_)));
+    assert!(!fixture.paths.config_file.exists());
+}
+
+#[test]
 fn start_service_points_sidecar_management_panel_to_runtime_panel() {
     let fixture = ManagerFixture::new("management-panel-dir-env");
     let bundled_sidecar = compile_mock_sidecar(fixture.path());
     let port = free_local_port();
-    let mut manager = ServiceManager::new(fixture.manager_config(&bundled_sidecar, port, "run", 0));
+    let mut manager =
+        ServiceManager::new(fixture.manager_config_with_config(&bundled_sidecar, port, "run", 0));
 
     let snapshot = manager.start_service().expect("服务应启动成功");
     let panel_dir_env = fs::read_to_string(fixture.paths.runtime_dir.join("management-panel-dir"))
@@ -163,7 +186,6 @@ fn start_service_points_sidecar_management_panel_to_runtime_panel() {
 struct ManagerFixture {
     root: TempDir,
     paths: DesktopPaths,
-    config_example: PathBuf,
     bundled_panel: PathBuf,
 }
 
@@ -178,26 +200,9 @@ impl ManagerFixture {
         fs::write(bundled_panel.join("manage.html"), "<html>manage</html>")
             .expect("写入测试 manage.html 失败");
 
-        let config_example = resources.join("config.example.yaml");
-        fs::write(
-            &config_example,
-            [
-                "host: \"\"",
-                "port: 9000",
-                "remote-management:",
-                "  disable-control-panel: false",
-                "auto-update:",
-                "  enabled: true",
-                "",
-            ]
-            .join("\n"),
-        )
-        .expect("写入测试 config.example.yaml 失败");
-
         Self {
             root,
             paths,
-            config_example,
             bundled_panel,
         }
     }
@@ -216,7 +221,6 @@ impl ManagerFixture {
         let mut config = ServiceManagerConfig::new(
             self.paths.clone(),
             DesktopSettings::default().with_port(port).unwrap(),
-            self.config_example.clone(),
             self.bundled_panel.clone(),
             self.paths.runtime_sidecar_executable.clone(),
             sidecar.to_path_buf(),
@@ -240,6 +244,26 @@ impl ManagerFixture {
             ready_delay_ms.to_string(),
         ));
         config
+    }
+
+    fn manager_config_with_config(
+        &self,
+        sidecar: &Path,
+        port: u16,
+        mode: &str,
+        ready_delay_ms: u64,
+    ) -> ServiceManagerConfig {
+        self.write_runtime_config(port);
+        self.manager_config(sidecar, port, mode, ready_delay_ms)
+    }
+
+    fn write_runtime_config(&self, port: u16) {
+        fs::create_dir_all(&self.paths.runtime_dir).expect("创建 runtime 目录失败");
+        fs::write(
+            &self.paths.config_file,
+            format!("host: \"\"\nport: {port}\n"),
+        )
+        .expect("写入 runtime config 失败");
     }
 }
 

@@ -8,6 +8,7 @@
     "core:event:default",
     "core:window:default",
     "core:window:allow-hide",
+    "dialog:allow-open",
     "autostart:allow-is-enabled"
   ]
 }

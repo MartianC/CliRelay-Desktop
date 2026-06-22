@@ -39,7 +39,6 @@ pub struct ServiceSnapshot {
 pub struct ServiceManagerConfig {
     pub paths: DesktopPaths,
     pub settings: DesktopSettings,
-    pub bundled_config_example: PathBuf,
     pub bundled_panel_dir: PathBuf,
     pub sidecar_executable: PathBuf,
     pub bundled_sidecar_executable: PathBuf,
@@ -56,7 +55,6 @@ impl ServiceManagerConfig {
     pub fn new(
         paths: DesktopPaths,
         settings: DesktopSettings,
-        bundled_config_example: PathBuf,
         bundled_panel_dir: PathBuf,
         sidecar_executable: PathBuf,
         bundled_sidecar_executable: PathBuf,
@@ -65,7 +63,6 @@ impl ServiceManagerConfig {
         Self {
             paths,
             settings,
-            bundled_config_example,
             bundled_panel_dir,
             sidecar_executable,
             bundled_sidecar_executable,
@@ -381,11 +378,11 @@ impl ServiceManager {
             &self.config.paths,
             &self.config.settings,
             &crate::runtime_resources::RuntimeResourceSources {
-                config_example: self.config.bundled_config_example.clone(),
                 panel_dir: self.config.bundled_panel_dir.clone(),
                 sidecar_executable: self.config.bundled_sidecar_executable.clone(),
             },
         )?;
+        crate::runtime_resources::ensure_runtime_config_present(&self.config.paths)?;
 
         Ok(())
     }

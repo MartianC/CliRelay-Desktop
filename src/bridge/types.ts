@@ -10,6 +10,7 @@ export type ServiceStatus =
 export type ProcessOwnership = "Owned" | "External" | "Stale" | "Unknown";
 export type DesktopLocale = "zh-CN" | "en";
 export type ManagementSecretStatus = "configured" | "missing";
+export type RuntimeConfigStatus = "ready" | "missing";
 
 export interface ServiceSnapshot {
   status: ServiceStatus;

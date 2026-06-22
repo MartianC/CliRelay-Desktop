@@ -12,7 +12,7 @@ use crate::service::state::ServiceStatus;
 use crate::settings::{load_or_create_settings, save_settings, DesktopSettings, SettingsError};
 use crate::settings::{
     read_management_secret_state, write_management_secret_key, DesktopLocale,
-    ManagementSecretStatus,
+    ManagementSecretStatus, RuntimeConfigStatus,
 };
 use crate::update_check::{
     build_update_check_result, component_releases_api_url, fetch_github_releases,
@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
-pub const SAFE_COMMAND_NAMES: [&str; 19] = [
+pub const SAFE_COMMAND_NAMES: [&str; 22] = [
     "get_service_snapshot",
     "start_service",
     "stop_service",
@@ -41,6 +41,9 @@ pub const SAFE_COMMAND_NAMES: [&str; 19] = [
     "copy_v1_endpoint",
     "get_desktop_settings",
     "update_desktop_settings",
+    "get_runtime_config_status",
+    "import_runtime_config",
+    "initialize_default_runtime_config",
     "get_management_secret_status",
     "set_management_secret_key",
     "quit_desktop",
@@ -221,7 +224,6 @@ impl DesktopCommandState {
         let manager_config = ServiceManagerConfig::new(
             paths.clone(),
             settings.clone(),
-            resources.config_example,
             resources.panel_dir,
             sidecar_executable,
             resources.sidecar_executable.clone(),
@@ -541,34 +543,53 @@ pub fn update_desktop_settings(
 }
 
 #[tauri::command]
-pub fn get_management_secret_status(
+pub fn get_runtime_config_status(
+    state: tauri::State<'_, SharedDesktopCommandState>,
+) -> Result<RuntimeConfigStatus, CommandError> {
+    let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+    Ok(crate::settings::runtime_config_status(&state.paths))
+}
+
+#[tauri::command]
+pub fn import_runtime_config(
+    state: tauri::State<'_, SharedDesktopCommandState>,
+    source_path: String,
+) -> Result<RuntimeConfigStatus, CommandError> {
+    let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
+    crate::settings::import_runtime_config_file(&state.paths, PathBuf::from(source_path))?;
+    Ok(crate::settings::runtime_config_status(&state.paths))
+}
+
+#[tauri::command]
+pub fn initialize_default_runtime_config(
     app: tauri::AppHandle,
     state: tauri::State<'_, SharedDesktopCommandState>,
-) -> Result<ManagementSecretStatus, CommandError> {
+) -> Result<RuntimeConfigStatus, CommandError> {
     let resources = ResourcePaths::resolve(&app)?;
     let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
-    crate::settings::ensure_runtime_config(
+    crate::settings::initialize_default_runtime_config(
         &state.paths,
         resources.config_example,
         &state.settings,
     )?;
+    Ok(crate::settings::runtime_config_status(&state.paths))
+}
+
+#[tauri::command]
+pub fn get_management_secret_status(
+    state: tauri::State<'_, SharedDesktopCommandState>,
+) -> Result<ManagementSecretStatus, CommandError> {
+    let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
     Ok(read_management_secret_state(&state.paths)?)
 }
 
 #[tauri::command]
 pub fn set_management_secret_key(
-    app: tauri::AppHandle,
     state: tauri::State<'_, SharedDesktopCommandState>,
     secret_key: String,
 ) -> Result<ManagementSecretStatus, CommandError> {
     let secret_key = validate_management_secret_key(&secret_key)?;
-    let resources = ResourcePaths::resolve(&app)?;
     let state = state.lock().map_err(|_| CommandError::StateLockPoisoned)?;
-    crate::settings::ensure_runtime_config(
-        &state.paths,
-        resources.config_example,
-        &state.settings,
-    )?;
     write_management_secret_key(&state.paths, secret_key)?;
     Ok(ManagementSecretStatus::Configured)
 }
@@ -1010,6 +1031,9 @@ mod tests {
                 "copy_v1_endpoint",
                 "get_desktop_settings",
                 "update_desktop_settings",
+                "get_runtime_config_status",
+                "import_runtime_config",
+                "initialize_default_runtime_config",
                 "get_management_secret_status",
                 "set_management_secret_key",
                 "quit_desktop",
@@ -1167,7 +1191,6 @@ mod tests {
         let manager_config = ServiceManagerConfig::new(
             paths.clone(),
             settings.clone(),
-            PathBuf::from("config.example.yaml"),
             PathBuf::from("panel"),
             paths.runtime_sidecar_executable.clone(),
             PathBuf::from("cli-proxy-api"),
@@ -1195,7 +1218,6 @@ mod tests {
         let manager_config = ServiceManagerConfig::new(
             paths.clone(),
             settings.clone(),
-            PathBuf::from("config.example.yaml"),
             PathBuf::from("panel"),
             paths.runtime_sidecar_executable.clone(),
             PathBuf::from("bundle-sidecar"),

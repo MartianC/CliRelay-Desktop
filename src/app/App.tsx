@@ -1,15 +1,21 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef, useState } from "react";
+import appIconUrl from "../../src-tauri/icons/icon.png";
 
 import {
+  chooseRuntimeConfigFile,
   copyEndpoint,
   getManagementSecretStatus,
+  getRuntimeConfigStatus,
+  importRuntimeConfig,
+  initializeDefaultRuntimeConfig,
   openDataDirectory,
   openLogDirectory,
   openSettings,
   quitDesktop,
   setManagementSecretKey,
 } from "../bridge/commands";
+import { ConfigImportDialog } from "../components/ConfigImportDialog";
 import { SettingsView } from "../components/SettingsView";
 import { ManagementSecretDialog } from "../components/ManagementSecretDialog";
 import { StatusView } from "../components/StatusView";
@@ -23,11 +29,15 @@ import { useI18n } from "../i18n/I18nProvider";
 import "../styles/app.css";
 
 type WindowRole = "main" | "settings";
+export type ConfigGateState = "checking" | "missing" | "ready" | "failed";
 export type SecretGateState = "checking" | "missing" | "configured" | "failed";
 
 function App() {
   const [windowRole, setWindowRole] = useState<WindowRole>("main");
   const [statusRequested, setStatusRequested] = useState(false);
+  const [configGateState, setConfigGateState] = useState<ConfigGateState>("checking");
+  const [configGateError, setConfigGateError] = useState<string | null>(null);
+  const [isHandlingConfig, setIsHandlingConfig] = useState(false);
   const [secretGateState, setSecretGateState] = useState<SecretGateState>("checking");
   const [secretGateError, setSecretGateError] = useState<string | null>(null);
   const [isSavingSecret, setIsSavingSecret] = useState(false);
@@ -49,7 +59,45 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (windowRole !== "main" || !settings.settings || secretGateState !== "checking") {
+    if (
+      !shouldCheckRuntimeConfig({
+        windowRole,
+        hasSettings: Boolean(settings.settings),
+        configGateState,
+      })
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+    void getRuntimeConfigStatus()
+      .then((status) => {
+        if (!isCancelled) {
+          setConfigGateState(status === "ready" ? "ready" : "missing");
+          setConfigGateError(null);
+        }
+      })
+      .catch((caught) => {
+        if (!isCancelled) {
+          setConfigGateState("failed");
+          setConfigGateError(toDisplayError(caught));
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [configGateState, settings.settings, windowRole]);
+
+  useEffect(() => {
+    if (
+      !shouldCheckManagementSecret({
+        windowRole,
+        hasSettings: Boolean(settings.settings),
+        configGateState,
+        secretGateState,
+      })
+    ) {
       return;
     }
 
@@ -71,7 +119,7 @@ function App() {
     return () => {
       isCancelled = true;
     };
-  }, [secretGateState, settings.settings, windowRole]);
+  }, [configGateState, secretGateState, settings.settings, windowRole]);
 
   useEffect(() => {
     void serviceStore.refresh();
@@ -193,6 +241,45 @@ function App() {
     void hideShellWindow();
   }, [service.snapshot?.status, settings.settings, statusRequested, windowRole]);
 
+  async function handleImportRuntimeConfig() {
+    setIsHandlingConfig(true);
+    setConfigGateError(null);
+    try {
+      const sourcePath = await chooseRuntimeConfigFile();
+      if (!sourcePath) {
+        return;
+      }
+
+      const status = await importRuntimeConfig(sourcePath);
+      setConfigGateState(status === "ready" ? "ready" : "missing");
+      setSecretGateState("checking");
+    } catch (caught) {
+      setConfigGateError(toDisplayError(caught));
+      setConfigGateState("failed");
+    } finally {
+      setIsHandlingConfig(false);
+    }
+  }
+
+  async function handleUseDefaultRuntimeConfig() {
+    setIsHandlingConfig(true);
+    setConfigGateError(null);
+    try {
+      const status = await initializeDefaultRuntimeConfig();
+      setConfigGateState(status === "ready" ? "ready" : "missing");
+      setSecretGateState("checking");
+    } catch (caught) {
+      setConfigGateError(toDisplayError(caught));
+      setConfigGateState("failed");
+    } finally {
+      setIsHandlingConfig(false);
+    }
+  }
+
+  function handleCancelRuntimeConfig() {
+    void quitDesktop();
+  }
+
   async function handleSubmitManagementSecret(secretKey: string) {
     setIsSavingSecret(true);
     setSecretGateError(null);
@@ -211,8 +298,21 @@ function App() {
     void quitDesktop();
   }
 
+  const configImportDialog =
+    windowRole === "main" &&
+    (configGateState === "missing" || configGateState === "failed") ? (
+      <ConfigImportDialog
+        error={configGateError}
+        isBusy={isHandlingConfig}
+        onImport={handleImportRuntimeConfig}
+        onUseDefault={handleUseDefaultRuntimeConfig}
+        onCancel={handleCancelRuntimeConfig}
+      />
+    ) : null;
+
   const managementSecretDialog =
     windowRole === "main" &&
+    configGateState === "ready" &&
     (secretGateState === "missing" || secretGateState === "failed") ? (
       <ManagementSecretDialog
         error={secretGateError}
@@ -268,6 +368,7 @@ function App() {
           onCancelExternal={() => setStatusRequested(false)}
           locale={settings.settings?.locale ?? "zh-CN"}
         />
+        {configImportDialog}
         {managementSecretDialog}
       </>
     );
@@ -283,6 +384,7 @@ function App() {
         startupFailed={Boolean(service.error)}
         onOpenStatus={() => setStatusRequested(true)}
       />
+      {configImportDialog}
       {managementSecretDialog}
     </>
   );
@@ -325,7 +427,7 @@ export function StartupShell({
     <main className="app-shell startup-shell">
       <section className="startup-content">
         <div className="startup-app-icon" aria-hidden="true">
-          <span className="terminal-mark">&gt;_</span>
+          <img className="startup-icon-image" src={appIconUrl} alt="" />
           <span className={`icon-status-dot status-${status.toLowerCase()}`} />
         </div>
 
@@ -399,6 +501,41 @@ function getStartupStep(
   }
 
   return 1;
+}
+
+interface RuntimeConfigCheckInput {
+  windowRole: WindowRole;
+  hasSettings: boolean;
+  configGateState: ConfigGateState;
+}
+
+export function shouldCheckRuntimeConfig({
+  windowRole,
+  hasSettings,
+  configGateState,
+}: RuntimeConfigCheckInput): boolean {
+  return windowRole === "main" && hasSettings && configGateState === "checking";
+}
+
+interface ManagementSecretCheckInput {
+  windowRole: WindowRole;
+  hasSettings: boolean;
+  configGateState: ConfigGateState;
+  secretGateState: SecretGateState;
+}
+
+export function shouldCheckManagementSecret({
+  windowRole,
+  hasSettings,
+  configGateState,
+  secretGateState,
+}: ManagementSecretCheckInput): boolean {
+  return (
+    windowRole === "main" &&
+    hasSettings &&
+    configGateState === "ready" &&
+    secretGateState === "checking"
+  );
 }
 
 interface AutoStartInput {

@@ -1,17 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { confirm } from "@tauri-apps/plugin-dialog";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
   applyPreparedComponentUpdates,
+  chooseRuntimeConfigFile,
   confirmPreparedComponentUpdateRestart,
   getDesktopVersion,
   getComponentUpdatePreparation,
   getDesktopSettings,
   getManagementSecretStatus,
+  getRuntimeConfigStatus,
   getServiceSnapshot,
+  importRuntimeConfig,
+  initializeDefaultRuntimeConfig,
   openExternalUrl,
   prepareUpstreamComponentUpdates,
   quitDesktop,
@@ -29,6 +33,7 @@ vi.mock("@tauri-apps/api/app", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   confirm: vi.fn(),
+  open: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-autostart", () => ({
@@ -44,6 +49,7 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 const invokeMock = vi.mocked(invoke);
 const getVersionMock = vi.mocked(getVersion);
 const confirmMock = vi.mocked(confirm);
+const openMock = vi.mocked(open);
 const openUrlMock = vi.mocked(openUrl);
 
 describe("desktop command bridge", () => {
@@ -51,6 +57,7 @@ describe("desktop command bridge", () => {
     invokeMock.mockReset();
     getVersionMock.mockReset();
     confirmMock.mockReset();
+    openMock.mockReset();
     openUrlMock.mockReset();
   });
 
@@ -207,6 +214,31 @@ describe("desktop command bridge", () => {
       secretKey: "  abc  ",
     });
     expect(invokeMock).toHaveBeenNthCalledWith(3, "quit_desktop");
+  });
+
+  test("config 导入命令映射 Rust 参数并用文件选择器限制 yaml", async () => {
+    invokeMock
+      .mockResolvedValueOnce("missing")
+      .mockResolvedValueOnce("ready")
+      .mockResolvedValueOnce("ready");
+    openMock.mockResolvedValueOnce("/Users/tester/config.yaml");
+
+    await expect(getRuntimeConfigStatus()).resolves.toBe("missing");
+    await expect(chooseRuntimeConfigFile()).resolves.toBe("/Users/tester/config.yaml");
+    await expect(importRuntimeConfig("/Users/tester/config.yaml")).resolves.toBe("ready");
+    await expect(initializeDefaultRuntimeConfig()).resolves.toBe("ready");
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "get_runtime_config_status");
+    expect(openMock).toHaveBeenCalledWith({
+      directory: false,
+      multiple: false,
+      title: "选择 CliRelay config 文件",
+      filters: [{ name: "CliRelay config", extensions: ["yaml", "yml"] }],
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "import_runtime_config", {
+      sourcePath: "/Users/tester/config.yaml",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(3, "initialize_default_runtime_config");
   });
 
   test("外部网页通过 Tauri opener 交给系统浏览器打开", async () => {

@@ -3,6 +3,8 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   StartupShell,
+  shouldCheckManagementSecret,
+  shouldCheckRuntimeConfig,
   shouldAutoStartService,
   shouldHideShellAfterSilentStartup,
   shouldOpenPanelAfterStartup,
@@ -31,6 +33,8 @@ describe("StartupShell", () => {
     expect(html).not.toContain("打开状态");
     expect(html).toContain("startup-content");
     expect(html).toContain("startup-app-icon");
+    expect(html).toContain("startup-icon-image");
+    expect(html).not.toContain("terminal-mark");
     expect(html).not.toContain("startup-window-titlebar");
     expect(html).not.toContain("traffic-lights");
   });
@@ -106,6 +110,44 @@ describe("shouldAutoStartService", () => {
         statusRequested: false,
         windowRole: "main",
         secretGateState: "configured",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("startup gates", () => {
+  test("主窗口加载 settings 后才检查 runtime config", () => {
+    expect(
+      shouldCheckRuntimeConfig({
+        windowRole: "main",
+        hasSettings: true,
+        configGateState: "checking",
+      }),
+    ).toBe(true);
+    expect(
+      shouldCheckRuntimeConfig({
+        windowRole: "main",
+        hasSettings: false,
+        configGateState: "checking",
+      }),
+    ).toBe(false);
+  });
+
+  test("runtime config ready 后才检查管理员密钥", () => {
+    expect(
+      shouldCheckManagementSecret({
+        windowRole: "main",
+        hasSettings: true,
+        configGateState: "ready",
+        secretGateState: "checking",
+      }),
+    ).toBe(true);
+    expect(
+      shouldCheckManagementSecret({
+        windowRole: "main",
+        hasSettings: true,
+        configGateState: "missing",
+        secretGateState: "checking",
       }),
     ).toBe(false);
   });

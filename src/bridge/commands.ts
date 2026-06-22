@@ -1,6 +1,6 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import { confirm } from "@tauri-apps/plugin-dialog";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -14,6 +14,7 @@ import type {
   DesktopSettingsPatch,
   ManagementSecretStatus,
   ProcessOwnership,
+  RuntimeConfigStatus,
   ServiceSnapshot,
   ServiceStatus,
   UpstreamInstallScope,
@@ -185,6 +186,31 @@ export async function updateDesktopSettings(
       patch: toRawSettingsPatch(patch),
     }),
   );
+}
+
+export async function getRuntimeConfigStatus(): Promise<RuntimeConfigStatus> {
+  return invoke<RuntimeConfigStatus>("get_runtime_config_status");
+}
+
+export async function chooseRuntimeConfigFile(): Promise<string | null> {
+  const selected = await open({
+    directory: false,
+    multiple: false,
+    title: "选择 CliRelay config 文件",
+    filters: [{ name: "CliRelay config", extensions: ["yaml", "yml"] }],
+  });
+
+  return typeof selected === "string" ? selected : null;
+}
+
+export async function importRuntimeConfig(
+  sourcePath: string,
+): Promise<RuntimeConfigStatus> {
+  return invoke<RuntimeConfigStatus>("import_runtime_config", { sourcePath });
+}
+
+export async function initializeDefaultRuntimeConfig(): Promise<RuntimeConfigStatus> {
+  return invoke<RuntimeConfigStatus>("initialize_default_runtime_config");
 }
 
 export async function getManagementSecretStatus(): Promise<ManagementSecretStatus> {

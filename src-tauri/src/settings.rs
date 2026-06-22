@@ -37,6 +37,13 @@ pub enum ManagementSecretStatus {
     Missing,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeConfigStatus {
+    Ready,
+    Missing,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DesktopSettings {
     #[serde(alias = "schemaVersion")]
@@ -194,6 +201,42 @@ pub fn ensure_runtime_config(
     fs::write(&paths.config_file, config)?;
 
     Ok(true)
+}
+
+pub fn runtime_config_status(paths: &DesktopPaths) -> RuntimeConfigStatus {
+    if paths.config_file.is_file() {
+        RuntimeConfigStatus::Ready
+    } else {
+        RuntimeConfigStatus::Missing
+    }
+}
+
+pub fn initialize_default_runtime_config(
+    paths: &DesktopPaths,
+    bundled_config_example: impl AsRef<Path>,
+    settings: &DesktopSettings,
+) -> Result<bool, SettingsError> {
+    ensure_runtime_config(paths, bundled_config_example, settings)
+}
+
+pub fn import_runtime_config_file(
+    paths: &DesktopPaths,
+    source_path: impl AsRef<Path>,
+) -> Result<(), SettingsError> {
+    let source_path = source_path.as_ref();
+    fs::create_dir_all(&paths.runtime_dir)?;
+
+    if paths.config_file.is_file() {
+        let source = fs::canonicalize(source_path);
+        let destination = fs::canonicalize(&paths.config_file);
+        if matches!((source, destination), (Ok(source), Ok(destination)) if source == destination) {
+            return Ok(());
+        }
+    }
+
+    fs::copy(source_path, &paths.config_file)?;
+
+    Ok(())
 }
 
 pub fn render_runtime_config(source: &str, port: u16) -> Result<String, SettingsError> {
@@ -589,6 +632,56 @@ mod tests {
             config.contains("panel-github-repository: \"https://github.com/kittors/codeProxy\"")
         );
         assert!(!paths.runtime_dir.join("auths").exists());
+    }
+
+    #[test]
+    fn imports_runtime_config_file_without_rewriting_contents() {
+        let root = temp_dir("import-config");
+        let paths = DesktopPaths::for_test(root.path().join("app-data"), root.path().join("logs"));
+        let source = root.path().join("selected-config.yaml");
+        let user_config = [
+            "host: \"127.0.0.1\"",
+            "port: 9456",
+            "remote-management:",
+            "  secret-key: \"already-set\"",
+            "",
+        ]
+        .join("\n");
+        fs::write(&source, &user_config).expect("写入用户选择 config 失败");
+
+        import_runtime_config_file(&paths, &source).expect("导入用户 config 应成功");
+
+        let imported = fs::read_to_string(paths.config_file).expect("读取 runtime config 失败");
+        assert_eq!(imported, user_config);
+    }
+
+    #[test]
+    fn initializes_default_runtime_config_from_bundle_when_user_declines_import() {
+        let root = temp_dir("default-config");
+        let paths = DesktopPaths::for_test(root.path().join("app-data"), root.path().join("logs"));
+        let source = root.path().join("config.example.yaml");
+        fs::write(
+            &source,
+            [
+                "host: \"\"",
+                "port: 9000",
+                "remote-management:",
+                "  disable-control-panel: false",
+                "auto-update:",
+                "  enabled: true",
+                "",
+            ]
+            .join("\n"),
+        )
+        .expect("写入源配置失败");
+        let settings = DesktopSettings::default().with_port(8317).unwrap();
+
+        initialize_default_runtime_config(&paths, &source, &settings)
+            .expect("初始化默认 runtime config 应成功");
+
+        let config = fs::read_to_string(paths.config_file).expect("读取 runtime config 失败");
+        assert!(config.contains("port: 8317"));
+        assert!(config.contains("auto-update:\n  enabled: false"));
     }
 
     #[test]

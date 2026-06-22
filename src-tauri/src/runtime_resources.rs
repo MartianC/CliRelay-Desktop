@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub struct RuntimeResourceSources {
-    pub config_example: PathBuf,
     pub panel_dir: PathBuf,
     pub sidecar_executable: PathBuf,
 }
@@ -19,6 +18,7 @@ pub struct RuntimeRepairReport {
 #[derive(Debug)]
 pub enum RuntimeResourceError {
     MissingBundledSidecar(PathBuf),
+    MissingRuntimeConfig(PathBuf),
     Io(std::io::Error),
     Settings(crate::settings::SettingsError),
 }
@@ -32,6 +32,9 @@ impl std::fmt::Display for RuntimeResourceError {
                     "app bundle 中缺少 CliRelay sidecar: {}",
                     path.display()
                 )
+            }
+            Self::MissingRuntimeConfig(path) => {
+                write!(formatter, "CliRelay config 文件不存在: {}", path.display())
             }
             Self::Io(error) => write!(formatter, "{error}"),
             Self::Settings(error) => write!(formatter, "{error}"),
@@ -55,21 +58,30 @@ impl From<crate::settings::SettingsError> for RuntimeResourceError {
 
 pub fn ensure_runtime_resources(
     paths: &DesktopPaths,
-    settings: &DesktopSettings,
+    _settings: &DesktopSettings,
     sources: &RuntimeResourceSources,
 ) -> Result<RuntimeRepairReport, RuntimeResourceError> {
     crate::settings::ensure_desktop_dirs(paths)?;
 
     let sidecar_rebuilt = ensure_runtime_sidecar(paths, &sources.sidecar_executable)?;
     let panel_rebuilt = crate::settings::ensure_panel_resources(paths, &sources.panel_dir)?;
-    let config_rebuilt =
-        crate::settings::ensure_runtime_config(paths, &sources.config_example, settings)?;
+    let config_rebuilt = false;
 
     Ok(RuntimeRepairReport {
         sidecar_rebuilt,
         panel_rebuilt,
         config_rebuilt,
     })
+}
+
+pub fn ensure_runtime_config_present(paths: &DesktopPaths) -> Result<(), RuntimeResourceError> {
+    if paths.config_file.is_file() {
+        return Ok(());
+    }
+
+    Err(RuntimeResourceError::MissingRuntimeConfig(
+        paths.config_file.clone(),
+    ))
 }
 
 fn ensure_runtime_sidecar(
@@ -166,24 +178,7 @@ mod tests {
 
         let bundle_sidecar = bundle.join("clirelay-aarch64-apple-darwin");
         fs::write(&bundle_sidecar, "bundle-sidecar").expect("写入 bundle sidecar 失败");
-        let bundle_config = bundle.join("config.example.yaml");
-        fs::write(
-            &bundle_config,
-            [
-                "host: \"\"",
-                "port: 9000",
-                "remote-management:",
-                "  disable-control-panel: false",
-                "auto-update:",
-                "  enabled: true",
-                "",
-            ]
-            .join("\n"),
-        )
-        .expect("写入 bundle config 失败");
-
         let sources = RuntimeResourceSources {
-            config_example: bundle_config,
             panel_dir: bundle_panel,
             sidecar_executable: bundle_sidecar,
         };
@@ -224,17 +219,15 @@ mod tests {
     }
 
     #[test]
-    fn rebuilds_missing_config_from_bundle_template() {
+    fn leaves_missing_config_for_startup_import_gate() {
         let (_root, paths, sources) = fixture("missing-config");
         let settings = DesktopSettings::default().with_port(8456).unwrap();
 
         let report = ensure_runtime_resources(&paths, &settings, &sources)
             .expect("修复 runtime resources 应成功");
 
-        assert!(report.config_rebuilt);
-        let config = fs::read_to_string(&paths.config_file).expect("读取 runtime config 失败");
-        assert!(config.contains("port: 8456"));
-        assert!(config.contains("auto-update:\n  enabled: false"));
+        assert!(!report.config_rebuilt);
+        assert!(!paths.config_file.exists());
     }
 
     #[test]

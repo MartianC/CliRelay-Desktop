@@ -154,21 +154,10 @@ input:disabled {
   width: 78px;
 }
 
-.terminal-mark {
-  align-items: center;
-  background: linear-gradient(180deg, #253140, #111827);
-  border-radius: 8px;
-  box-shadow: 0 8px 16px rgb(17 24 39 / 0.2);
-  color: #ffffff;
-  display: flex;
-  font-family:
-    "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
-  font-size: 1.25rem;
-  font-weight: 800;
-  height: 44px;
-  justify-content: center;
-  letter-spacing: 0;
-  width: 44px;
+.startup-icon-image {
+  display: block;
+  height: 58px;
+  width: 58px;
 }
 
 .icon-status-dot {
@@ -359,6 +348,10 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.config-import-actions {
+  justify-content: flex-start;
 }
 
 .startup-footer {
