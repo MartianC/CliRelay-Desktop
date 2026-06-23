@@ -15,11 +15,16 @@ describe("ConfigImportDialog", () => {
       />,
     );
 
-    expect(html).toContain("导入 CliRelay config");
-    expect(html).toContain("选择已有 config 文件");
-    expect(html).toContain("使用默认配置");
+    expect(html).toContain("导入配置文件");
+    expect(html).toContain("首次启动 1/2");
+    expect(html).toContain("后续：管理密钥");
+    expect(html).toContain("CliRelay config");
+    expect(html).toContain("选择已有 config");
+    expect(html).toContain("使用默认");
     expect(html).toContain("退出");
     expect(html).toContain("config-import-dialog");
     expect(html).toContain("settings-section-body");
+    expect(html.indexOf("退出")).toBeLessThan(html.indexOf("使用默认"));
+    expect(html.indexOf("使用默认")).toBeLessThan(html.indexOf("选择已有 config"));
   });
 });

@@ -22,5 +22,7 @@ describe("ManagementSecretDialog", () => {
     expect(html).toContain("settings-section");
     expect(html).toContain("settings-section-body");
     expect(html).toContain("secret-field-row");
+    expect(html).not.toContain("password-eye-icon");
+    expect(html.indexOf("取消")).toBeLessThan(html.indexOf("确认"));
   });
 });

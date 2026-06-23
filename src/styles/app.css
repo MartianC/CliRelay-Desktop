@@ -351,7 +351,7 @@ h2 {
 }
 
 .config-import-actions {
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .startup-footer {
@@ -442,19 +442,6 @@ h2 {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.action-stack {
-  display: grid;
-  gap: 8px;
-}
-
-.external-choice {
-  align-items: center;
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-  padding: 18px 20px;
 }
 
 .inline-error {
@@ -574,12 +561,12 @@ h2 {
   font-size: 1.45rem;
 }
 
-.settings-content-header > button:not(:disabled) {
+.settings-content-header > button:not(.secondary):not(.ghost):not(:disabled) {
   background: var(--settings-accent);
   border-color: var(--settings-accent);
 }
 
-.settings-content-header > button:not(:disabled):hover {
+.settings-content-header > button:not(.secondary):not(.ghost):not(:disabled):hover {
   background: #1e40af;
   border-color: #1e40af;
 }
@@ -1065,30 +1052,224 @@ h2 {
   width: 100%;
 }
 
-.status-summary-section .status-summary {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  padding: 15px;
+.status-settings-shell {
+  background:
+    radial-gradient(circle at 20% 0%, rgb(255 255 255 / 0.88), transparent 34%),
+    #eef3f8;
 }
 
-.status-summary-section .status-summary strong {
-  color: #182230;
+.status-settings-content {
+  gap: 18px;
+}
+
+.status-settings-content .settings-content-header {
+  padding: 8px 2px 12px;
+}
+
+.status-settings-content .settings-content-header h2 {
+  font-size: 1.62rem;
+}
+
+.status-settings-content .settings-content-header .muted {
+  max-width: 640px;
 }
 
 .status-settings-content .split-layout {
   box-shadow: none;
 }
 
-.external-choice h3 {
-  color: #253145;
-  font-size: 0.92rem;
+.recovery-problem-card {
+  background: #fffafa;
+  border-color: #f2b8b8;
+  box-shadow: 0 8px 18px rgb(180 35 24 / 0.04);
+}
+
+.recovery-status-badge {
+  align-items: center;
+  background: #fff6ed;
+  border: 1px solid #ffcca8;
+  border-radius: 999px;
+  color: #d92d20;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 750;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.recovery-status-badge span {
+  background: currentColor;
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
+}
+
+.recovery-problem-body {
+  align-items: flex-start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 26px;
+}
+
+.recovery-alert-icon {
+  align-items: center;
+  background: linear-gradient(180deg, #ef4444, #d92d20);
+  border-radius: 999px;
+  box-shadow: 0 10px 22px rgb(217 45 32 / 0.2);
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 1.5rem;
+  font-weight: 850;
+  height: 42px;
+  justify-content: center;
+  line-height: 1;
+  margin-top: 6px;
+  width: 42px;
+}
+
+.recovery-problem-heading-row {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.recovery-problem-heading-row > strong {
+  color: #111827;
+  display: block;
+  font-size: 1.28rem;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.recovery-problem-copy > p {
+  color: #667085;
+  margin: 8px 0 16px;
+}
+
+.recovery-meta-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe3ed;
+  border-radius: 999px;
+  color: #667085;
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
+  gap: 10px;
+  min-height: 28px;
+  padding: 0 12px;
+}
+
+.recovery-meta-footer {
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid #f3caca;
+  justify-content: flex-start;
+  min-height: 48px;
+  padding: 0 34px;
+  width: 100%;
+}
+
+.recovery-meta-row code,
+.recovery-meta-row strong {
+  color: #1f2933;
+  font-family:
+    "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88rem;
+  font-weight: 750;
+}
+
+.recovery-meta-divider {
+  color: #98a2b3;
+}
+
+.recovery-actions-card,
+.recovery-diagnostics-card {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 20px;
+}
+
+.recovery-actions-card h3,
+.recovery-diagnostics-card h3 {
+  color: #111827;
+  font-size: 0.96rem;
   margin: 0;
+}
+
+.recovery-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.recovery-actions > button:not(.secondary):not(.ghost),
+.secret-dialog-actions > button:not(.secondary):not(.ghost) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.recovery-actions > button:not(.secondary):not(.ghost):hover,
+.secret-dialog-actions > button:not(.secondary):not(.ghost):hover {
+  background: #1e40af;
+  border-color: #1e40af;
+}
+
+.recovery-log-link {
+  flex-basis: 100%;
+  justify-content: flex-end;
+  justify-self: flex-end;
+  margin-left: auto;
+  min-height: 28px;
+  text-align: right;
+}
+
+.recovery-diagnostics-card {
+  background: #fbfcfe;
+}
+
+.recovery-diagnostics-card .muted {
+  margin-top: 8px;
+}
+
+.recovery-details-toggle {
+  gap: 6px;
+  min-height: 32px;
+}
+
+.recovery-chevron-icon {
+  fill: none;
+  height: 15px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  transition: transform 160ms ease;
+  width: 15px;
+}
+
+.recovery-chevron-icon[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+.recovery-details-list {
+  border-top: 1px solid #e7edf4;
+  grid-column: 1 / -1;
+  padding-top: 14px;
 }
 
 .secret-dialog-backdrop {
   align-items: center;
-  background: rgb(15 23 42 / 0.32);
+  background:
+    radial-gradient(circle at 30% 12%, rgb(255 255 255 / 0.86), transparent 34%),
+    rgb(238 243 248 / 0.86);
   display: flex;
   inset: 0;
   justify-content: center;
@@ -1098,17 +1279,101 @@ h2 {
 }
 
 .secret-dialog {
-  box-shadow: 0 22px 60px rgb(15 23 42 / 0.22);
-  max-width: 420px;
+  background: #fbfcfe;
+  border-color: #cfd8e4;
+  box-shadow:
+    0 24px 60px rgb(31 41 51 / 0.18),
+    0 1px 0 rgb(255 255 255 / 0.9) inset;
+  max-width: 500px;
+  padding: 28px;
   width: 100%;
 }
 
 .secret-dialog-body {
-  gap: 14px;
-  padding: 16px;
+  gap: 18px;
+  padding: 0;
 }
 
 .secret-dialog-body > .muted {
+  margin: 0;
+}
+
+.secret-dialog-header {
+  margin: 20px 0 20px;
+}
+
+.secret-dialog-header h3 {
+  color: #111827;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.dialog-step-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dialog-step-chip {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #d7dee8;
+  border-radius: 999px;
+  color: #475467;
+  display: inline-flex;
+  font-size: 0.84rem;
+  font-weight: 750;
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.dialog-step-chip.active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.dialog-step-chip.complete {
+  background: #eefaf2;
+  border-color: #b9e3c1;
+  color: #20723b;
+}
+
+.dialog-inner-card {
+  background: #ffffff;
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  box-shadow: 0 8px 18px rgb(31 41 51 / 0.04);
+  display: grid;
+  overflow: hidden;
+}
+
+.dialog-inner-card h4 {
+  border-bottom: 1px solid #e7edf4;
+  color: #253145;
+  font-size: 0.95rem;
+  margin: 0;
+  padding: 15px 17px;
+}
+
+.dialog-inner-card > div {
+  padding: 18px 17px 22px;
+}
+
+.dialog-inner-card strong {
+  color: #111827;
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.secret-fields-card {
+  display: grid;
+  gap: 14px;
+}
+
+.secret-fields-card .secret-field-row {
   margin: 0;
 }
 
@@ -1127,8 +1392,14 @@ h2 {
 .secret-dialog input {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  min-height: 38px;
+  min-height: 40px;
   padding: 8px 10px;
+  width: 100%;
+}
+
+.password-field {
+  display: grid;
+  position: relative;
 }
 
 .secret-dialog .inline-error {
@@ -1136,7 +1407,15 @@ h2 {
 }
 
 .secret-dialog-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  width: 100%;
+}
+
+.dialog-action-spacer {
+  flex: 1 1 auto;
 }
 
 .link-button {
@@ -1164,8 +1443,7 @@ h2 {
 
   .startup-top,
   .shell-header,
-  .startup-footer,
-  .external-choice {
+  .startup-footer {
     align-items: stretch;
     flex-direction: column;
   }

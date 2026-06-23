@@ -20,7 +20,7 @@ const snapshot: ServiceSnapshot = {
 };
 
 describe("StatusView", () => {
-  test("显示恢复入口、状态字段和 External 选择", () => {
+  test("按简洁恢复弹窗渲染问题、建议操作和折叠诊断详情", () => {
     const html = renderToStaticMarkup(
       <StatusView
         snapshot={snapshot}
@@ -28,24 +28,28 @@ describe("StatusView", () => {
         isBusy={false}
         onRefresh={vi.fn()}
         onOpenPanel={vi.fn()}
-        onStart={vi.fn()}
-        onStop={vi.fn()}
         onRestart={vi.fn()}
-        onOpenDataDirectory={vi.fn()}
         onOpenLogDirectory={vi.fn()}
-        onCopyEndpoint={vi.fn()}
         onChangePort={vi.fn()}
-        onCancelExternal={vi.fn()}
       />,
     );
 
     expect(html).toContain("菜单 / Dock / 恢复状态");
     expect(html).toContain("运行状态");
-    expect(html).toContain("Panel URL");
+    expect(html).toContain("CliRelay 无法启动");
+    expect(html).toContain("端口 8317 已被占用");
+    expect(html).toContain("建议操作");
+    expect(html).toContain("诊断详情");
+    expect(html).toContain("展开详情");
     expect(html).toContain("打开日志目录");
-    expect(html).toContain("连接现有服务");
-    expect(html).toContain("更改端口");
-    expect(html).toContain("取消");
+    expect(html).toContain("连接现有");
+    expect(html).toContain("改端口");
+    expect(html).toContain("重试");
+    expect(html).not.toContain("Panel URL");
+    expect(html).not.toContain("打开管理面板");
+    expect(html).not.toContain("停止");
+    expect(html).not.toContain("复制 API Base URL");
+    expect(html).not.toContain("取消");
     expect(html).toContain("settings-shell");
     expect(html).toContain("settings-content");
     expect(html).toContain("settings-section");

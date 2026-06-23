@@ -56,37 +56,47 @@ export function ManagementSecretDialog({
         aria-labelledby="management-secret-title"
         onSubmit={(event) => void handleSubmit(event)}
       >
-        <h3 id="management-secret-title">管理密钥</h3>
+        <div className="dialog-step-row" aria-label="首次启动进度">
+          <span className="dialog-step-chip complete">配置文件已就绪</span>
+          <span className="dialog-step-chip active">首次启动 2/2</span>
+        </div>
+        <header className="secret-dialog-header">
+          <h3 id="management-secret-title">设置管理密钥</h3>
+          <p className="muted">
+            写入 CliRelay remote-management 密钥，用于后续管理面板访问。
+          </p>
+        </header>
         <div className="settings-section-body secret-dialog-body">
-          <p className="muted">首次启动前需要设置 CliRelay 管理密钥。</p>
+          <div className="secret-fields-card" aria-label="管理密钥">
+            <label className="secret-field-row">
+              <span>管理密钥</span>
+              <span className="password-field">
+                <input
+                  type="password"
+                  value={secretKey}
+                  disabled={isSaving}
+                  autoFocus
+                  onChange={(event) => setSecretKey(event.currentTarget.value)}
+                />
+              </span>
+            </label>
 
-          <label className="secret-field-row">
-            <span>管理密钥</span>
-            <input
-              type="password"
-              value={secretKey}
-              disabled={isSaving}
-              autoFocus
-              onChange={(event) => setSecretKey(event.currentTarget.value)}
-            />
-          </label>
-
-          <label className="secret-field-row">
-            <span>再次输入管理密钥</span>
-            <input
-              type="password"
-              value={confirmation}
-              disabled={isSaving}
-              onChange={(event) => setConfirmation(event.currentTarget.value)}
-            />
-          </label>
+            <label className="secret-field-row">
+              <span>再次输入管理密钥</span>
+              <span className="password-field">
+                <input
+                  type="password"
+                  value={confirmation}
+                  disabled={isSaving}
+                  onChange={(event) => setConfirmation(event.currentTarget.value)}
+                />
+              </span>
+            </label>
+          </div>
 
           {visibleError ? <p className="inline-error">{visibleError}</p> : null}
 
           <div className="button-row secret-dialog-actions">
-            <button type="submit" disabled={isSaving}>
-              确认
-            </button>
             <button
               type="button"
               className="secondary"
@@ -94,6 +104,9 @@ export function ManagementSecretDialog({
               onClick={() => void onCancel()}
             >
               取消
+            </button>
+            <button type="submit" disabled={isSaving}>
+              确认
             </button>
           </div>
         </div>

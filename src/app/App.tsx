@@ -4,7 +4,6 @@ import appIconUrl from "../../src-tauri/icons/icon.png";
 
 import {
   chooseRuntimeConfigFile,
-  copyEndpoint,
   getManagementSecretStatus,
   getRuntimeConfigStatus,
   importRuntimeConfig,
@@ -358,14 +357,9 @@ function App() {
           isBusy={service.isBusy || service.panelOpening}
           onRefresh={serviceStore.refresh}
           onOpenPanel={serviceStore.openPanel}
-          onStart={serviceStore.start}
-          onStop={serviceStore.stop}
           onRestart={serviceStore.restart}
-          onOpenDataDirectory={openDataDirectory}
           onOpenLogDirectory={openLogDirectory}
-          onCopyEndpoint={copyEndpoint}
           onChangePort={openSettings}
-          onCancelExternal={() => setStatusRequested(false)}
           locale={settings.settings?.locale ?? "zh-CN"}
         />
         {configImportDialog}
