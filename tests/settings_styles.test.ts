@@ -95,4 +95,10 @@ describe("Settings 样式", () => {
     expect(toggleControl).toContain("width: 38px");
     expect(appCss).toContain(".toggle-input:checked + .toggle-control");
   });
+
+  test("关于页产品信息块按内容适配高度", () => {
+    const aboutProduct = cssBlock(".settings-about-product");
+
+    expect(aboutProduct).toContain("align-self: start");
+  });
 });

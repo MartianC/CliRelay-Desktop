@@ -51,7 +51,7 @@ export const messages = {
     "settings.upstreamProjects": "上游项目",
     "settings.license": "许可证",
     "settings.licenseValue": "见 THIRD_PARTY_NOTICES.md",
-    "settings.aboutDescription": "CliRelay Desktop 是独立的非官方桌面伴侣。",
+    "settings.aboutDescription": "CliRelay Desktop 是独立的非官方桌面客户端。",
     "update.statusAvailable": "有可用更新",
     "update.statusUpToDate": "已是最新",
     "update.statusError": "检查失败",

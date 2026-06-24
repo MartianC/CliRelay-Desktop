@@ -354,13 +354,12 @@ export function SettingsView(props: SettingsViewProps) {
                     <p>{t("settings.aboutDescription")}</p>
                   </div>
                 </section>
-                <SettingsPanel title={t("settings.product")}>
+                <SettingsPanel title={t("settings.product")} className="settings-about-product">
                   <dl className="field-list compact">
                     <FieldRow label={t("settings.app")} value="CliRelay Desktop" />
                     <FieldRow label={t("settings.desktopVersion")} value={desktopVersion} mono />
                     <FieldRow label={t("settings.channel")} value={t("settings.previewChannel")} />
-                    <FieldRow label={t("settings.upstreamProjects")} value="CliRelay / codeProxy" />
-                    <FieldRow label={t("settings.license")} value={t("settings.licenseValue")} />
+                    <FieldRow label={t("settings.upstreamProjects")} value="CliRelay & codeProxy" />
                   </dl>
                 </SettingsPanel>
               </>
@@ -669,11 +668,12 @@ function LanguageSegmentedControl({
 interface SettingsPanelProps {
   title: string;
   children: ReactNode;
+  className?: string;
 }
 
-function SettingsPanel({ title, children }: SettingsPanelProps) {
+function SettingsPanel({ title, children, className }: SettingsPanelProps) {
   return (
-    <section className="settings-section">
+    <section className={className ? `settings-section ${className}` : "settings-section"}>
       <h3>{title}</h3>
       <div className="settings-section-body">{children}</div>
     </section>

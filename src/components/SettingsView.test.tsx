@@ -187,6 +187,9 @@ describe("SettingsView", () => {
     expect(html).toContain("正在读取版本");
     expect(html).toContain("app-icon-image");
     expect(html).toContain("/Untitled-macOS-Dark-1024@1x.png");
+    expect(html).toContain("settings-about-product");
+    expect(html).not.toContain("许可证");
+    expect(html).not.toContain("THIRD_PARTY_NOTICES.md");
     expect(html).not.toContain("terminal-mark");
   });
 

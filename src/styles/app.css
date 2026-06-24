@@ -606,6 +606,10 @@ h2 {
   margin: 0 15px 15px;
 }
 
+.settings-about-product {
+  align-self: start;
+}
+
 .update-status-strip,
 .update-block {
   background: #ffffff;
