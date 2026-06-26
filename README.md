@@ -180,3 +180,7 @@ CliRelay Desktop runs a local service that can proxy model API traffic and manag
 ## License and Notices
 
 See [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) for bundled upstream component notices. This desktop app is an independent project and does not imply endorsement by upstream projects.
+
+## Friend Link
+
+- [LINUX DO](https://linux.do/)
