@@ -91,6 +91,18 @@ pub fn restore_target(status: ServiceStatus, last_surface: LastUserSurface) -> R
     }
 }
 
+pub fn restore_target_after_dock_click(
+    status: ServiceStatus,
+    last_surface: LastUserSurface,
+    open_panel_on_start: bool,
+) -> RestoreTarget {
+    if status == ServiceStatus::Running && !open_panel_on_start {
+        return RestoreTarget::Panel;
+    }
+
+    restore_target(status, last_surface)
+}
+
 pub fn saved_bounds_fit_current_monitors(
     bounds: SavedWindowBounds,
     work_areas: &[MonitorWorkArea],
@@ -161,15 +173,24 @@ pub fn restore_after_dock_click<R: tauri::Runtime>(app: &tauri::AppHandle<R>) ->
         .and_then(|state| state.lock().ok().map(|state| state.last_user_surface()))
         .unwrap_or(LastUserSurface::Status);
 
-    let snapshot = app
+    let command_state = app
         .try_state::<SharedDesktopCommandState>()
-        .and_then(|state| state.lock().ok().map(|state| state.service_snapshot()));
+        .and_then(|state| {
+            state
+                .lock()
+                .ok()
+                .map(|state| (state.service_snapshot(), state.open_panel_on_start()))
+        });
 
-    let Some(snapshot) = snapshot else {
+    let Some((snapshot, open_panel_on_start)) = command_state else {
         return main::show_status_window(app);
     };
 
-    match restore_target(snapshot.status, last_surface) {
+    match restore_target_after_dock_click(
+        snapshot.status.clone(),
+        last_surface,
+        open_panel_on_start,
+    ) {
         RestoreTarget::Panel => panel::show_panel_window(app, snapshot.port),
         RestoreTarget::Status => main::show_status_window(app),
     }
@@ -299,6 +320,14 @@ mod tests {
                 RestoreTarget::Status
             );
         }
+    }
+
+    #[test]
+    fn dock_restore_opens_panel_after_silent_start_when_service_is_running() {
+        assert_eq!(
+            restore_target_after_dock_click(ServiceStatus::Running, LastUserSurface::Status, false),
+            RestoreTarget::Panel
+        );
     }
 
     #[test]

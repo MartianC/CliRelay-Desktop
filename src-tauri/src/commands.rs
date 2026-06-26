@@ -250,6 +250,10 @@ impl DesktopCommandState {
         self.settings.locale
     }
 
+    pub fn open_panel_on_start(&self) -> bool {
+        self.settings.open_panel_on_start
+    }
+
     pub fn start_service(&mut self) -> Result<ServiceSnapshot, ManagerError> {
         self.manager.start_service()
     }
