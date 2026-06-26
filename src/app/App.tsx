@@ -24,6 +24,7 @@ import {
   shouldAutoCheckUpdates,
   useSettingsStore,
 } from "../stores/settingsStore";
+import type { ServiceStatus } from "../bridge/types";
 import { useI18n } from "../i18n/I18nProvider";
 import "../styles/app.css";
 
@@ -46,6 +47,7 @@ function App() {
   const didRequestAutoStart = useRef(false);
   const didRequestAutoUpdateCheck = useRef(false);
   const didHideShell = useRef(false);
+  const didShowShell = useRef(false);
 
   useEffect(() => {
     try {
@@ -147,6 +149,37 @@ function App() {
 
     return () => window.clearTimeout(timer);
   }, [settings.settings]);
+
+  useEffect(() => {
+    if (
+      didShowShell.current ||
+      !shouldShowShellWindow({
+        windowRole,
+        hasSettings: Boolean(settings.settings),
+        settingsError: settings.error,
+        openPanelOnStart: settings.settings?.openPanelOnStart ?? null,
+        configGateState,
+        secretGateState,
+        snapshotStatus: service.snapshot?.status ?? null,
+        statusRequested,
+        startupFailed: Boolean(service.error),
+      })
+    ) {
+      return;
+    }
+
+    didShowShell.current = true;
+    void showShellWindow();
+  }, [
+    configGateState,
+    secretGateState,
+    service.error,
+    service.snapshot?.status,
+    settings.error,
+    settings.settings,
+    statusRequested,
+    windowRole,
+  ]);
 
   useEffect(() => {
     if (
@@ -603,6 +636,66 @@ export function shouldHideShellAfterSilentStartup(input: {
     !input.openPanelOnStart &&
     input.snapshotStatus === "Running"
   );
+}
+
+export function shouldShowShellWindow(input: {
+  windowRole: WindowRole;
+  hasSettings: boolean;
+  settingsError: string | null;
+  openPanelOnStart: boolean | null;
+  configGateState: ConfigGateState;
+  secretGateState: SecretGateState;
+  snapshotStatus: ServiceStatus | null;
+  statusRequested: boolean;
+  startupFailed: boolean;
+}): boolean {
+  if (input.windowRole !== "main") {
+    return false;
+  }
+
+  if (input.statusRequested || input.startupFailed) {
+    return true;
+  }
+
+  if (input.settingsError && !input.hasSettings) {
+    return true;
+  }
+
+  if (input.configGateState === "missing" || input.configGateState === "failed") {
+    return true;
+  }
+
+  if (
+    input.configGateState === "ready" &&
+    (input.secretGateState === "missing" || input.secretGateState === "failed")
+  ) {
+    return true;
+  }
+
+  if (
+    input.snapshotStatus &&
+    shouldUseRecoveryView(input.snapshotStatus)
+  ) {
+    return true;
+  }
+
+  if (!input.hasSettings || input.openPanelOnStart === null) {
+    return false;
+  }
+
+  return input.openPanelOnStart;
+}
+
+async function showShellWindow(): Promise<void> {
+  try {
+    const window = getCurrentWindow();
+    if (window.label === "main") {
+      await window.show();
+      await window.setFocus();
+    }
+  } catch {
+    // 浏览器开发模式下没有 Tauri window runtime。
+  }
 }
 
 async function hideShellWindow(): Promise<void> {

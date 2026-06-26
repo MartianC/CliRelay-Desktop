@@ -8,6 +8,7 @@ import {
   shouldAutoStartService,
   shouldHideShellAfterSilentStartup,
   shouldOpenPanelAfterStartup,
+  shouldShowShellWindow,
 } from "./App";
 
 describe("StartupShell", () => {
@@ -221,6 +222,70 @@ describe("shouldHideShellAfterSilentStartup", () => {
         snapshotStatus: "Running",
         windowRole: "main",
         statusRequested: false,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("shouldShowShellWindow", () => {
+  test("静默启动且门禁已完成时不显示启动窗口", () => {
+    expect(
+      shouldShowShellWindow({
+        windowRole: "main",
+        hasSettings: true,
+        settingsError: null,
+        openPanelOnStart: false,
+        configGateState: "ready",
+        secretGateState: "configured",
+        snapshotStatus: "Starting",
+        statusRequested: false,
+        startupFailed: false,
+      }),
+    ).toBe(false);
+  });
+
+  test("普通启动需要显示启动窗口", () => {
+    expect(
+      shouldShowShellWindow({
+        windowRole: "main",
+        hasSettings: true,
+        settingsError: null,
+        openPanelOnStart: true,
+        configGateState: "ready",
+        secretGateState: "configured",
+        snapshotStatus: "Starting",
+        statusRequested: false,
+        startupFailed: false,
+      }),
+    ).toBe(true);
+  });
+
+  test("静默启动遇到门禁或启动失败时仍显示窗口", () => {
+    expect(
+      shouldShowShellWindow({
+        windowRole: "main",
+        hasSettings: true,
+        settingsError: null,
+        openPanelOnStart: false,
+        configGateState: "missing",
+        secretGateState: "checking",
+        snapshotStatus: "Stopped",
+        statusRequested: false,
+        startupFailed: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldShowShellWindow({
+        windowRole: "main",
+        hasSettings: true,
+        settingsError: null,
+        openPanelOnStart: false,
+        configGateState: "ready",
+        secretGateState: "configured",
+        snapshotStatus: "Stopped",
+        statusRequested: false,
+        startupFailed: true,
       }),
     ).toBe(true);
   });
