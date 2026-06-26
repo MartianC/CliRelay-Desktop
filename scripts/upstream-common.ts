@@ -34,6 +34,9 @@ export interface UpstreamLock {
 }
 
 export const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+export const upstreamLockPath = join(repoRoot, "upstream-lock.json");
+export const upstreamLockingDocPath = join(repoRoot, "docs", "dev", "upstream-locking.md");
+export const thirdPartyNoticesPath = join(repoRoot, "THIRD_PARTY_NOTICES.md");
 export const srcTauriDir = join(repoRoot, "src-tauri");
 export const sidecarPath = join(srcTauriDir, "binaries", "clirelay-aarch64-apple-darwin");
 export const configExamplePath = join(srcTauriDir, "resources", "config.example.yaml");
@@ -41,7 +44,7 @@ export const panelDir = join(srcTauriDir, "resources", "panel");
 export const panelEntrypointPath = join(panelDir, "manage.html");
 
 export async function readUpstreamLock(): Promise<UpstreamLock> {
-  const raw = await readFile(join(repoRoot, "upstream-lock.json"), "utf8");
+  const raw = await readFile(upstreamLockPath, "utf8");
   return JSON.parse(raw) as UpstreamLock;
 }
 

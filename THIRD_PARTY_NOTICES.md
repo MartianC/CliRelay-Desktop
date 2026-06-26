@@ -1,6 +1,6 @@
 # Third Party Notices
 
-This file is generated for each Preview release by `scripts/generate-notices.ts`.
+This file is updated by `scripts/update-upstream-lock.ts` when the bundled upstream component lock changes.
 
 Bundled upstream component:
 

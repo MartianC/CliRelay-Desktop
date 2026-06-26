@@ -10,6 +10,10 @@ const ignoredUpstreamOutputs = [
   "src-tauri/resources/panel/assets/panel-chunk.js",
 ];
 
+function versionWithoutPrefix(version: string): string {
+  return version.replace(/^v/, "");
+}
+
 describe("upstream-lock.json", () => {
   test("can be parsed", () => {
     expect(upstreamLock).toHaveProperty("clirelay");
@@ -18,10 +22,11 @@ describe("upstream-lock.json", () => {
 
   test("locks the macOS arm64 CliRelay asset", () => {
     const asset = upstreamLock.clirelay.assets["aarch64-apple-darwin"];
+    const version = versionWithoutPrefix(upstreamLock.clirelay.version);
 
-    expect(asset.fileName).toBe("CliRelay_0.4.6_darwin_arm64.tar.gz");
+    expect(asset.fileName).toBe(`CliRelay_${version}_darwin_arm64.tar.gz`);
     expect(asset.downloadUrl).toBe(
-      "https://github.com/kittors/CliRelay/releases/download/v0.4.6/CliRelay_0.4.6_darwin_arm64.tar.gz",
+      `https://github.com/kittors/CliRelay/releases/download/${upstreamLock.clirelay.version}/${asset.fileName}`,
     );
     expect(asset.sha256).toMatch(sha256Pattern);
     expect(asset.extractedBinaryPath).toBe("cli-proxy-api");
@@ -37,7 +42,9 @@ describe("upstream-lock.json", () => {
     const asset = upstreamLock.codeProxy.asset;
 
     expect(asset.fileName).toBe("panel-dist.zip");
-    expect(asset.downloadUrl).toBe("https://github.com/kittors/codeProxy/releases/download/v0.4.7/panel-dist.zip");
+    expect(asset.downloadUrl).toBe(
+      `https://github.com/kittors/codeProxy/releases/download/${upstreamLock.codeProxy.version}/panel-dist.zip`,
+    );
     expect(asset.sha256).toMatch(sha256Pattern);
     expect(asset.entrypoint).toBe("manage.html");
   });

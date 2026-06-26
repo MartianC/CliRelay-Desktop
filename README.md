@@ -93,6 +93,18 @@ pnpm tauri build
 
 The locked upstream versions and checksums live in [`upstream-lock.json`](./upstream-lock.json).
 
+Update the locked upstream release metadata:
+
+```bash
+pnpm upstream:update
+```
+
+Pin specific upstream release tags:
+
+```bash
+pnpm upstream:update -- --clirelay-version vX.Y.Z --codeproxy-version vX.Y.Z
+```
+
 Fetch and verify the bundled CliRelay sidecar, default config, and codeProxy panel assets:
 
 ```bash

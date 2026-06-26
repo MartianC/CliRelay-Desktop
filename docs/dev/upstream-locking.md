@@ -17,4 +17,15 @@ Current lock:
 - codeProxy SHA-256: 00cfa8c1735dae9785c197dc91e3431d9aa1bfc31913363a5821daaaaf0abfee
 - codeProxy entrypoint: manage.html
 
-To update the lock, inspect each upstream release, record the tag commit, verify checksums or GitHub Release asset digests, and commit the lock change before running Release CI.
+Update flow:
+
+1. Run `pnpm upstream:update` to update `upstream-lock.json`, this document, and third-party notices.
+2. Run `pnpm upstream:fetch` to download and verify the locked assets into ignored local build inputs.
+3. Run `pnpm upstream:verify` before building or releasing.
+4. Commit the lock, docs, and tests. Do not commit fetched `src-tauri/binaries/` or `src-tauri/resources/` outputs.
+
+To pin a specific release, pass explicit tags:
+
+```bash
+pnpm upstream:update -- --clirelay-version vX.Y.Z --codeproxy-version vX.Y.Z
+```

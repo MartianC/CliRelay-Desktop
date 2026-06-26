@@ -93,6 +93,18 @@ pnpm tauri build
 
 锁定的上游版本、下载地址和校验值记录在 [`upstream-lock.json`](./upstream-lock.json)。
 
+更新锁定的上游 Release 元数据：
+
+```bash
+pnpm upstream:update
+```
+
+指定上游 Release tag：
+
+```bash
+pnpm upstream:update -- --clirelay-version vX.Y.Z --codeproxy-version vX.Y.Z
+```
+
 拉取并校验随包的 CliRelay sidecar、默认配置和 codeProxy 面板资源：
 
 ```bash

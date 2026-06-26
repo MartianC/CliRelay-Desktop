@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "upstream:update": "tsx scripts/update-upstream-lock.ts",
     "upstream:fetch": "tsx scripts/fetch-upstream.ts",
     "upstream:verify": "tsx scripts/verify-checksum.ts"
   },
